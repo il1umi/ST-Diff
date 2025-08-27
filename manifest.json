@@ -1,0 +1,12 @@
+{
+  "display_name": "酒馆构筑对比工具",
+  "loading_order": 888,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "presentation/styles/main.css",
+  "author": "shin/il1umi",
+  "version": "1.0.0",
+  "homePage": "https://github.com/il1umi/ST-Diff.git"
+}
+

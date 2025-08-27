@@ -1,0 +1,18 @@
+<!-- 世界书模块占位面板：后续在世界书页面注入 -->
+<div id="stdiff-worldbook-panel" class="stdiff-panel" style="margin:6px 0; padding:6px 8px; border:1px solid var(--SmartThemeBorderColor, #444); border-radius:6px;">
+  <div class="stdiff-row" style="display:flex; flex-direction:column; gap:6px;">
+    <label for="stdiff-worldbook-b" style="white-space:nowrap;">用于对比的世界书：</label>
+    <div id="stdiff-worldbook-controls" style="display:flex; gap:8px; align-items:center;">
+      <select id="stdiff-worldbook-b" title="选择‘（未选择）’即可清除对比" style="min-width:220px; flex:0 0 50%;"></select>
+      <input id="stdiff-worldbook-filter" type="text" placeholder="输入关键字过滤…" style="flex:1 1 50%; min-width:160px;" />
+    </div>
+    <div id="stdiff-worldbook-tools" class="stdiff-tools" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <label style="display:flex; gap:4px; align-items:center;"><input type="checkbox" id="stdiff-opt-ignorews" /> 忽略空白</label>
+      <label style="display:flex; gap:4px; align-items:center;"><input type="checkbox" id="stdiff-opt-ignorecase" /> 忽略大小写</label>
+      <label style="display:flex; gap:4px; align-items:center;"><input type="checkbox" id="stdiff-opt-json" /> JSON归一化</label>
+      <button id="stdiff-run-compare" class="menu_button">对比</button>
+    </div>
+    <div id="stdiff-compare-output" style="margin-top:6px; font-size:12px; opacity:0.9;"></div>
+  </div>
+</div>
+

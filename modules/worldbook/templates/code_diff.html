@@ -1,0 +1,98 @@
+<!-- 内容代码Diff 弹窗模板：提供并列/内联视图模式切换、上下文行数等选项 -->
+    <style>
+      /* 仅作用于本弹窗内部的行级高亮 */
+      .stdiff-code-container .added { background-color: var(--stdiff-bg-added, rgba(26,127,55,0.18)); }
+      .stdiff-code-container .removed { background-color: var(--stdiff-bg-removed, rgba(180,35,24,0.18)); }
+      /* 表格模式：直接给单元格着色，避免 tr 背景被覆盖 */
+      .stdiff-code-container table.stdiff-code.side tr.added > td { background-color: var(--stdiff-bg-added, rgba(26,127,55,0.18)) !important; background-clip: padding-box; }
+      .stdiff-code-container table.stdiff-code.side tr.removed > td { background-color: var(--stdiff-bg-removed, rgba(180,35,24,0.18)) !important; background-clip: padding-box; }
+      /* 直接作用到code单元格，确保不被主题覆盖 */
+      .stdiff-code-container td.code.added { background-color: var(--stdiff-bg-added, rgba(26,127,55,0.18)) !important; background-clip: padding-box; }
+      .stdiff-code-container td.code.removed { background-color: var(--stdiff-bg-removed, rgba(180,35,24,0.18)) !important; background-clip: padding-box; }
+      /* 内联模式：整行块着色 */
+      .stdiff-code-container .row.added { background-color: var(--stdiff-bg-added, rgba(26,127,55,0.18)) !important; }
+      .stdiff-code-container .row.removed { background-color: var(--stdiff-bg-removed, rgba(180,35,24,0.18)) !important; }
+      .stdiff-code-toolbar label { display:inline-flex; align-items:center; gap:4px; }
+      /* 避免酒馆全局样式导致按钮中文文字断行成竖排显示 */
+      .stdiff-code-toolbar .menu_button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        writing-mode: horizontal-tb !important;
+        text-orientation: mixed !important;
+        transform: none !important;
+        white-space: nowrap;
+        height: auto;
+        line-height: 1.2;
+        padding: 4px 8px;
+      }
+      /* 词级高亮样式（内联模式）*/
+      /* 词级高亮：文字着色 */
+      .stdiff-code-container .w-added { background: none !important; color: var(--stdiff-word-color-added, #2ecc71) !important; font-weight: 600; }
+      .stdiff-code-container .w-removed { background: none !important; color: var(--stdiff-word-color-removed, #ff4d4f) !important; font-weight: 600; }
+
+      .stdiff-color-swatch { width:16px; height:16px; border-radius:3px; border:1px solid var(--SmartThemeBorderColor,#555); cursor:pointer; display:inline-block; }
+      .stdiff-color-palette { display:flex; gap:6px; align-items:center; }
+      body.stdiff-noscroll { overflow: hidden !important; }
+      .stdiff-self-fullscreen { position: fixed !important; inset: 0 !important; width:100vw !important; height:100vh !important; z-index:10000 !important; background: var(--SmartThemeBodyColor, #111); }
+      /* 浏览器全屏时的修饰，可按需补充 */
+      .stdiff-code-dialog.stdiff-fullscreen-active { width: 100% !important; max-width: none !important; }
+    </style>
+
+<div class="stdiff-code-dialog" style="width: 100%; max-width: none;">
+  <div class="stdiff-code-toolbar" style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
+    <label style="display:inline-flex; align-items:center; gap:4px;"><input type="radio" name="stdiff-code-view" value="side" checked> 并列</label>
+    <label style="display:inline-flex; align-items:center; gap:4px;"><input type="radio" name="stdiff-code-view" value="inline"> 内联</label>
+    <label style="display:inline-flex; align-items:center; gap:4px;">上下文行数 <input type="number" id="stdiff-code-context" min="0" max="20" value="3" style="width:60px;"></label>
+    <label style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="stdiff-code-collapse" checked> 折叠相同内容</label>
+    <label style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="stdiff-code-linenum" checked> 行号</label>
+    <label style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="stdiff-code-sync" checked> 同步滚动</label>
+    <label>高度
+      <select id="stdiff-code-height">
+        <option value="70vh">70vh</option>
+        <option value="85vh">85vh</option>
+      </select>
+    </label>
+    <label>字号
+      <select id="stdiff-code-fontsize">
+        <option value="11px">11px</option>
+        <option value="12px" selected>12px</option>
+        <option value="13px">13px</option>
+        <option value="14px">14px</option>
+        <option value="16px">16px</option>
+      </select>
+    </label>
+    <label>行级高亮
+      <select id="stdiff-code-scheme">
+        <option value="classic">经典（红/绿）</option>
+        <option value="custom">自定义颜色</option>
+      </select>
+    </label>
+    <button id="stdiff-toggle-palette" type="button" class="menu_button" style="display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;writing-mode:horizontal-tb!important;text-orientation:mixed!important;transform:none!important;line-height:1.2;">调色板</button>
+    <button id="stdiff-clear-cache" type="button" class="menu_button" style="display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;writing-mode:horizontal-tb!important;text-orientation:mixed!important;transform:none!important;line-height:1.2;" title="清除展开对比缓存（词级缓存与预取快照）">清除缓存</button>
+    <button id="stdiff-save-all" type="button" class="menu_button" style="display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;writing-mode:horizontal-tb!important;text-orientation:mixed!important;transform:none!important;line-height:1.2;">保存全部</button>
+    <button id="stdiff-save-A" type="button" class="menu_button" style="display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;writing-mode:horizontal-tb!important;text-orientation:mixed!important;transform:none!important;line-height:1.2;">仅保存A</button>
+    <button id="stdiff-save-B" type="button" class="menu_button" style="display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;writing-mode:horizontal-tb!important;text-orientation:mixed!important;transform:none!important;line-height:1.2;">仅保存B</button>
+    <span id="stdiff-session-info" style="margin-left:auto; color: var(--SmartThemeBorderColor,#777);">已应用: <span id="stdiff-applied-count">0</span></span>
+    <button id="stdiff-undo-last" type="button" class="menu_button" style="display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;writing-mode:horizontal-tb!important;text-orientation:mixed!important;transform:none!important;line-height:1.2;" disabled>撤销上一步</button>
+    <button id="stdiff-undo-all" type="button" class="menu_button" style="display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;writing-mode:horizontal-tb!important;text-orientation:mixed!important;transform:none!important;line-height:1.2;" disabled>撤销全部</button>
+  </div>
+  <!-- 调色板（可折叠） -->
+  <div id="stdiff-palette" style="display:none; margin:6px 0; padding:8px; border:1px dashed var(--SmartThemeBorderColor,#555); border-radius:6px;">
+    <div class="stdiff-row" style="display:flex; align-items:center; gap:12px; flex-wrap:nowrap;">
+      <label style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="stdiff-word-enable" checked> 词级高亮</label>
+      <div class="stdiff-color-palette" id="stdiff-custom-colors" style="display:none;">
+        行级：旧 <input type="color" id="stdiff-color-removed" value="#b42318"> <span class="stdiff-color-swatch" id="swatch-removed"></span>
+        新 <input type="color" id="stdiff-color-added" value="#1a7f37"> <span class="stdiff-color-swatch" id="swatch-added"></span>
+      </div>
+      <span class="stdiff-color-palette">
+        词级：删 <input type="color" id="stdiff-word-color-removed" value="#ff4d4f"> <span class="stdiff-color-swatch" id="swatch-word-removed"></span>
+        增 <input type="color" id="stdiff-word-color-added" value="#2ecc71"> <span class="stdiff-color-swatch" id="swatch-word-added"></span>
+      </span>
+    </div>
+  </div>
+  <div class="stdiff-code-container" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:var(--stdiff-code-fontsize,12px); line-height:1.5; border:1px solid var(--SmartThemeBorderColor,#444); border-radius:6px; overflow:auto; max-height:var(--stdiff-code-height,70vh); width:100%; display:block;">
+  </div>
+</div>
+

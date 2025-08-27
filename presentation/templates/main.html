@@ -1,0 +1,39 @@
+<div id="st-diff" class="extension_block">
+  <div class="inline-drawer" id="stdiff-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header">
+      <b>酒馆构筑对比工具</b>
+      <!-- 图标仅作为视觉标识，点击行为由酒馆全局接管，不重复绑定 -->
+      <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content">
+      <div style="margin:6px 0;">
+        <label class="checkbox_label"><input type="checkbox" id="stdiff-enabled"> 启用本扩展</label>
+      </div>
+
+      <!-- 以下为占位，将在后续启用 -->
+      <div class="st-diff-toolbar" style="display:none">
+        <label>视图：
+          <select data-stdiff-view-mode>
+            <option value="side-by-side">并排</option>
+            <option value="unified">合并</option>
+          </select>
+        </label>
+        <label><input type="checkbox" data-stdiff-ignore-ws checked style="display:none"> 忽略空白</label>
+        <label><input type="checkbox" data-stdiff-ignore-case style="display:none"> 忽略大小写</label>
+        <button class="menu_button fa-solid fa-code-compare" data-stdiff-compare style="display:none">Compare</button>
+      </div>
+
+      <div class="st-diff-body" style="display:none">
+        <div class="st-diff-left">
+          <div class="st-diff-nav">Diff Navigator (占位)</div>
+        </div>
+        <div class="st-diff-center">
+          <div class="st-diff-view">Diff View (占位)</div>
+        </div>
+        <div class="st-diff-right">
+          <div class="st-diff-details">Field Details (占位)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

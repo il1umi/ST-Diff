@@ -1,0 +1,14 @@
+/* Minimal structure-only styles; colors inherit from ST theme */
+#st-diff .st-diff-body { display: grid; grid-template-columns: 260px 1fr 320px; gap: 12px; }
+#st-diff .st-diff-toolbar { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
+#st-diff .st-diff-left, #st-diff .st-diff-center, #st-diff .st-diff-right { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 8px; }
+#st-diff .st-diff-view { min-height: 240px; }
+
+
+
+/* 避免酒馆的全局样式导致的按钮中文文字断行的竖排文字效果 */
+#st-diff .menu_button { width: auto; white-space: nowrap; }
+#stdiff-worldbook-panel .menu_button { width: auto; white-space: nowrap; display: inline-flex; align-items: center; }
+#stdiff-worldbook-panel .stdiff-row label { white-space: nowrap; }
+#stdiff-worldbook-panel .stdiff-row select { min-width: 260px; }
+
