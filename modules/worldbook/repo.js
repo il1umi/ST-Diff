@@ -3,7 +3,7 @@
 // 说明：
 // - 首选使用 ctx（getContext()）提供的数据/方法；
 // - 其次尝试从页面现有 DOM 的世界书下拉读取（只读标题）；
-// - 最后兜底使用可能存在的全局变量（如 window.world_names / window.world_info 等）。
+// - 最后使用可能存在的全局变量（如 window.world_names / window.world_info 等）。
 
 function stableStringify(obj) {
   const seen = new WeakSet();
@@ -67,7 +67,7 @@ export function createWorldbookRepo(ctx) {
     // 回退 DOM
     const fromDom = listFromDom();
     if (fromDom.length) return fromDom;
-    // 兜底：尝试从可能的全局结构里提取标题
+    // 最后尝试从可能的全局结构里提取标题
     try {
       const wi = window.world_info || [];
       const set = new Set(); const out = [];
@@ -106,7 +106,7 @@ export function createWorldbookRepo(ctx) {
       }
     } catch {}
 
-    // 2) 全局对象兜底
+    // 2) 全局对象保底
     try {
       // 应对某些构建里会把当前加载的世界书挂到全局 map 上
       if (window.worlds && typeof window.worlds === 'object') {
@@ -157,7 +157,7 @@ export function createWorldbookRepo(ctx) {
     rawEntries = rawEntries.concat(toArrayFromPossible(book?.originalData?.entries));
     rawEntries = rawEntries.concat(toArrayFromPossible(book?.originalData?.lorebook?.entries));
 
-    // 去重（按 key+value 粗略去重，避免不同来源重复）
+    // 去重（暂按 key+value 粗略去重，避免不同来源重复）
     const seen = new Set();
     const uniq = [];
     for (const e of rawEntries) {

@@ -118,6 +118,46 @@ export async function mount(ctx){
         anchors.forEach(a=> mo.observe(a, { childList:true, subtree:true }));
       }
     }catch{}
+      // 只读（禁写B）选项：加载与持久化
+      try{
+        const root = ctx.extensionSettings || window.extension_settings;
+        root['st-diff'] = root['st-diff'] || {}; root['st-diff'].worldinfo = root['st-diff'].worldinfo || {};
+        const $ro = $('#stdiff-readonly');
+        $ro.prop('checked', !!root['st-diff'].worldinfo.readonly);
+        $ro.off('change.stdifRO').on('change.stdifRO', ()=>{
+          root['st-diff'].worldinfo.readonly = $ro.prop('checked');
+          (ctx.saveSettingsDebounced || window.saveSettingsDebounced || (()=>{}))();
+          try { toastr.info(root['st-diff'].worldinfo.readonly? 'B写入已禁用' : 'B写入已启用', '只读模式'); } catch{}
+        });
+      } catch{}
+
+      // 暂存模式（手动保存）选项：加载与持久化
+      try{
+        const root = ctx.extensionSettings || window.extension_settings;
+        root['st-diff'] = root['st-diff'] || {}; root['st-diff'].worldinfo = root['st-diff'].worldinfo || {};
+        const $st = $('#stdiff-staging');
+        // 默认开启暂存模式（手动保存）
+        if (root['st-diff'].worldinfo.staging === undefined) {
+          root['st-diff'].worldinfo.staging = true;
+          (ctx.saveSettingsDebounced || window.saveSettingsDebounced || (()=>{}))();
+        }
+        $st.prop('checked', !!root['st-diff'].worldinfo.staging);
+        $st.off('change.stdifSTG').on('change.stdifSTG', ()=>{
+          root['st-diff'].worldinfo.staging = $st.prop('checked');
+          (ctx.saveSettingsDebounced || window.saveSettingsDebounced || (()=>{}))();
+          try { toastr.info(root['st-diff'].worldinfo.staging? '已开启暂存模式' : '已关闭暂存模式'); } catch{}
+        });
+      } catch{}
+
+      // 暂存“保存”按钮
+      try{
+        const $btnSave = $('#stdiff-staging-save');
+        $btnSave.off('click.stdifSTGS').on('click.stdifSTGS', ()=>{
+          try{ window.STDiff?.worldinfo?.commitStaging?.(); }catch(e){ console.warn('[ST-Diff] commitStaging error', e); }
+        });
+      } catch{}
+
+
 
     // 选项与对比 UI：持久化 + 仓库接入 + 对比按钮
     try {
@@ -203,6 +243,114 @@ export async function mount(ctx){
             $('#stdiff-compare-output').text('对比失败：' + (err?.message||err));
           }
         });
+
+
+      // 工具：刷新缓存 + 清理占位条目
+      try {
+        const repo = await import('./repo.js');
+        const api = repo.createWorldbookRepo(ctx);
+        const $btnRefresh = $('#stdiff-cache-refresh');
+        const $btnClean = $('#stdiff-clean-placeholders');
+
+        // 刷新缓存：清空扩展缓存并预读当前B
+        $btnRefresh.off('click.stdifCache').on('click.stdifCache', async ()=>{
+          try{
+            const root = ctx.extensionSettings || window.extension_settings;
+            if (root?.['st-diff']?.worldinfo){ delete root['st-diff'].worldinfo.cachedB; }
+            window.STDiff = window.STDiff || {}; delete window.STDiff.cachedB;
+            toastr?.info?.('已清除扩展缓存并刷新');
+          }catch(e){ console.warn('[ST-Diff] refresh cache error', e); }
+        });
+
+        // 扫描并清理占位/误创建条目（B）
+        $btnClean.off('click.stdifClean').on('click.stdifClean', async ()=>{
+          const name = $('#stdiff-worldbook-b').val() || '';
+          if (!name){ toastr?.warning?.('请先选择世界书B'); return; }
+          let book = await api.get(name);
+          let data = book; // 使用编辑器结构
+          if (!data){ toastr?.error?.('无法加载世界书B'); return; }
+          if (Array.isArray(data.entries)){
+            const obj = {}; for (const it of data.entries){ const uid = (it?.uid ?? it?.id ?? it?._id ?? '').toString(); if (uid) obj[uid]=it; } data.entries=obj;
+          }
+          data.entries ||= {};
+          const isDefault = (v, def) => (v===undefined || v===null) ? true : String(v)===String(def);
+          const candidates = [];
+          for (const [uid, e] of Object.entries(data.entries)){
+            const comment = (e.comment||'').toString().trim();
+            const content = (e.content||'').toString().trim();
+            const hasKeys = (Array.isArray(e.keys)&&e.keys.length) || (Array.isArray(e.key)&&e.key.length) || (Array.isArray(e.keysecondary)&&e.keysecondary.length);
+            const isTestTitle = /^测试$/i.test(comment);
+            const isMinimal = !hasKeys && !content && (comment==='')
+              && isDefault(e.order,0) && isDefault(e.depth,0) && isDefault(e.position,0) && isDefault(e.probability,100);
+            if (isTestTitle || isMinimal) candidates.push({ uid, comment });
+          }
+          if (!candidates.length){ toastr?.info?.('未发现可清理的占位/测试条目'); return; }
+          const listHtml = candidates.map(c=>`<li>UID ${c.uid}：${c.comment?c.comment:'<i>(空标题)</i>'}</li>`).join('');
+          const html = `<div><h3>将删除以下占位条目（${candidates.length}）</h3><ol>${listHtml}</ol></div>`;
+          const ok = await ctx.callGenericPopup?.(html, 'confirm', '清理占位条目', { okButton:'删除', cancelButton:'取消' });
+          if (!ok) return;
+          for (const c of candidates) { try { delete data.entries[c.uid]; } catch{} }
+          const res = await api.saveBook(name, data);
+          if (res?.ok){ toastr?.success?.('清理完成'); try{ await ctx.reloadWorldInfoEditor?.(name); }catch{} }
+          else { toastr?.error?.('保存失败：'+(res?.reason||'')); }
+        });
+
+        // 清理占位（A）：当前正在编辑的世界书
+        try{
+          const $btnCleanA = $('#stdiff-clean-placeholders-A');
+          const inferAName = ()=>{
+            try {
+              const sel = (function(){
+                const all = Array.from(document.querySelectorAll('select'));
+                for (const s of all){ const t = s.options?.[0]?.textContent?.trim()||''; if (/选择以编辑|Select\s*to\s*edit/i.test(t)) return s; }
+                return document.querySelector('#worlds_select') || document.querySelector('#world_editor_select_list') || document.querySelector('#world_editor_select');
+              })();
+              if (sel){
+                const val = sel.value || '';
+                const txt = sel.options?.[sel.selectedIndex]?.textContent?.trim() || val || '';
+                return txt || val || '';
+              }
+            } catch{}
+            return '';
+          };
+          $btnCleanA.off('click.stdifCleanA').on('click.stdifCleanA', async ()=>{
+            const name = inferAName();
+            if (!name){ toastr?.warning?.('未找到正在编辑的世界书（A）'); return; }
+            let book = await api.get(name);
+            let data = book; // 使用编辑器结构
+            if (!data){ toastr?.error?.('无法加载世界书A'); return; }
+            if (Array.isArray(data.entries)){
+              const obj = {}; for (const it of data.entries){ const uid = (it?.uid ?? it?.id ?? it?._id ?? '').toString(); if (uid) obj[uid]=it; } data.entries=obj;
+            }
+            data.entries ||= {};
+            const isDefault = (v, def) => (v===undefined || v===null) ? true : String(v)===String(def);
+            const candidates = [];
+            for (const [uid, e] of Object.entries(data.entries)){
+              const comment = (e.comment||'').toString().trim();
+              const content = (e.content||'').toString().trim();
+              const hasKeys = (Array.isArray(e.key)&&e.key.length) || (Array.isArray(e.keys)&&e.keys.length) || (Array.isArray(e.keysecondary)&&e.keysecondary.length);
+              const isTestTitle = /^测试$/i.test(comment);
+              const isMinimal = !hasKeys && !content && (comment==='')
+                && isDefault(e.order,0) && isDefault(e.depth,0) && isDefault(e.position,0) && isDefault(e.probability,100);
+              if (isTestTitle || isMinimal) candidates.push({ uid, comment });
+            }
+            if (!candidates.length){ toastr?.info?.('未发现可清理的占位/测试条目（A）'); return; }
+            const listHtml = candidates.map(c=>`<li>UID ${c.uid}：${c.comment?c.comment:'<i>(空标题)</i>'}</li>`).join('');
+            const html = `<div><h3>将删除以下占位/测试条目（${candidates.length}）</h3><ol>${listHtml}</ol></div>`;
+            const ok = await ctx.callGenericPopup?.(html, 'confirm', '清理A占位条目', { okButton:'删除', cancelButton:'取消' });
+            if (!ok) return;
+            for (const c of candidates) { try { delete data.entries[c.uid]; } catch{} }
+            const res = await api.saveBook(name, data);
+            if (res?.ok){ toastr?.success?.('A清理完成'); try{ await ctx.reloadWorldInfoEditor?.(name); }catch{} }
+            else { toastr?.error?.('保存失败：'+(res?.reason||'')); }
+          });
+        }catch{}
+
+      } catch (e){ console.warn('[ST-Diff] tools init failed', e); }
+
+    // 启动参数Diff注入（在用户进入条目详情时动态插入B参数行）
+    try { const mod = await import('./paramsDiff.js?ts='+Date.now()); mod.initParamsDiff(ctx); } catch(e) { try{ console.warn('[ST-Diff] paramsDiff init failed', e); }catch{} }
+
       }
     } catch {}
 

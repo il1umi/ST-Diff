@@ -1,4 +1,4 @@
-<!-- 世界书模块占位面板：后续在世界书页面注入 -->
+<!-- 世界书模块面板：在世界书页面注入 -->
 <div id="stdiff-worldbook-panel" class="stdiff-panel" style="margin:6px 0; padding:6px 8px; border:1px solid var(--SmartThemeBorderColor, #444); border-radius:6px;">
   <div class="stdiff-row" style="display:flex; flex-direction:column; gap:6px;">
     <label for="stdiff-worldbook-b" style="white-space:nowrap;">用于对比的世界书：</label>
@@ -11,6 +11,12 @@
       <label style="display:flex; gap:4px; align-items:center;"><input type="checkbox" id="stdiff-opt-ignorecase" /> 忽略大小写</label>
       <label style="display:flex; gap:4px; align-items:center;"><input type="checkbox" id="stdiff-opt-json" /> JSON归一化</label>
       <button id="stdiff-run-compare" class="menu_button">对比</button>
+      <label style="display:flex; gap:4px; align-items:center;"><input type="checkbox" id="stdiff-readonly" /> 只读（禁写B）</label>
+      <label style="display:flex; gap:4px; align-items:center;"><input type="checkbox" id="stdiff-staging" /> 暂存模式（手动保存）</label>
+      <button id="stdiff-cache-refresh" class="menu_button" title="清除扩展缓存并从磁盘重载">刷新缓存</button>
+      <button id="stdiff-clean-placeholders" class="menu_button" title="扫描并清理B世界书中的占位/误创建条目">清理B占位</button>
+      <button id="stdiff-clean-placeholders-A" class="menu_button" title="扫描并清理当前A世界书中的占位/测试条目">清理A占位</button>
+      <button id="stdiff-staging-save" class="menu_button" title="将暂存更改写入世界书B">保存暂存</button>
     </div>
     <div id="stdiff-compare-output" style="margin-top:6px; font-size:12px; opacity:0.9;"></div>
   </div>
