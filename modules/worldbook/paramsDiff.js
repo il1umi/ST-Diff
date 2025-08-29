@@ -367,7 +367,7 @@ export async function initParamsDiff(ctx){
         // 可选：更新 original map（非必须，但是还是放在这里吧....万一以后用得上呢）
 
 
-        // originalKeyPath 
+        // originalKeyPath
         await api.saveBook(B_name, B_data);
       } catch(e){ console.warn('[ST-Diff][paramsDiff] save failed', field, e); }
     }
@@ -557,8 +557,9 @@ export async function initParamsDiff(ctx){
       $names.on('input', save); $tags.on('input', save); $cb.on('input', save);
     }
 
-    function wireEntryState($row, initConstant, initVectorized, setConstant, setVectorized){
-      $row.append(createBLabel('状态'));
+    function wireEntryState($row, initConstant, initVectorized, setConstant, setVectorized, combinedSave, opts){
+      const noLabel = !!(opts && opts.noLabel);
+      if (!noLabel) $row.append(createBLabel('触发策略'));
       const $sel = $('<select class="text_pole widthNatural margin0"></select>');
       $sel.append('<option value="normal">🟢</option>');
       $sel.append('<option value="constant">🔵</option>');
@@ -569,10 +570,22 @@ export async function initParamsDiff(ctx){
       $row.append($sel);
       $sel.on('input', ()=>{
         const val = $sel.val();
-        if (val === 'vectorized'){ setVectorized(true); setConstant(false); }
-        else if (val === 'constant'){ setVectorized(false); setConstant(true); }
-        else { setVectorized(false); setConstant(false); }
+        if (combinedSave){
+          if (val === 'vectorized') combinedSave({ constant:false, vectorized:true });
+          else if (val === 'constant') combinedSave({ constant:true, vectorized:false });
+          else combinedSave({ constant:false, vectorized:false });
+        } else {
+          if (val === 'vectorized'){ setVectorized(true); setConstant(false); }
+          else if (val === 'constant'){ setVectorized(false); setConstant(true); }
+          else { setVectorized(false); setConstant(false); }
+        }
       });
+      // 仅选择当前状态，不触发保存
+      try{
+        const vSel = initVectorized ? 'vectorized' : (initConstant ? 'constant' : 'normal');
+        $sel.find(`option[value="${vSel}"]`).prop('selected', true);
+      }catch{}
+      return $sel;
     }
 
     function wirePosition($row, label, initPos, initRole, $selA, onChange){
@@ -621,9 +634,8 @@ export async function initParamsDiff(ctx){
         const aLite = readAEntryFromDom($entry);
         log('aLite', aLite);
         if (!aLite) return;
-        const aEntry = A_data.entries?.[aLite.uid];
+        /* const aEntry = A_data.entries?.[aLite.uid]; */
         let bEntry = findEntryInBookByA(B_data, aLite) || B_data.entries?.[aLite.uid];
-        const bWasMissing = !bEntry;
         if (!bEntry) { bEntry = { __pendingCreate: true }; }
 
         // 仅在抽屉内容已渲染时插入；并且只检查抽屉内部是否已有我们的区块
@@ -633,16 +645,7 @@ export async function initParamsDiff(ctx){
         // 允许同一控件块内出现多个 B 行（区分不同字段），仅避免重复对同一字段二次注入由 insertBRow 去重
 
         // 提前定位标题区域（少量提示用），但不再用于插入位置
-        const $titleZone = $entry.find('.WIEntryTitleAndStatus');
-
-
-
-        // 辅助：确保B侧条目存在（必要时根据A的关键信息自动创建）
-        async function ensureBEntryExists(){
-          // 不在此处创建/写入 entries，避免无交互时产生占位条目
-          if (bEntry && bEntry.uid) return bEntry;
-          return null;
-        }
+        /* const $titleZone = $entry.find('.WIEntryTitleAndStatus'); */
 
 
         // 暂存：记录哪些世界书存在未保存的更改（按世界书名）
@@ -676,8 +679,41 @@ export async function initParamsDiff(ctx){
           }
         } catch{}
 
+        // 字段名到中文名的映射
+        const fieldNameMap = {
+          'key': '主要关键字（世界书B）',
+          'keysecondary': '可选过滤器（世界书B）',
+          'selectiveLogic': '逻辑（世界书B）',
+          'position': '位置（世界书B）',
+          'role': '角色（世界书B）',
+          'order': '顺序（世界书B）',
+          'depth': '深度（世界书B）',
+          'probability': '概率（世界书B）',
+          'constant': '触发策略（世界书B）',
+          'vectorized': '触发策略（世界书B）',
+          'groupWeight': '组权重（世界书B）',
+          'scanDepth': '扫描深度（世界书B）',
+          'delayUntilRecursion': '递归等级（世界书B）',
+          'automationId': '自动化ID（世界书B）',
+          'group': '分组标签（世界书B）',
+          'groupOverride': '优先（世界书B）',
+          'sticky': '粘滞（世界书B）',
+          'cooldown': '冷却（世界书B）',
+          'delay': '延迟（世界书B）',
+          'characterFilter': '角色过滤（世界书B）',
+          'excludeRecursion': '不可递归（世界书B）',
+          'preventRecursion': '防止进一步递归（世界书B）',
+          'delayUntilRecursionFlag': '延迟到递归（世界书B）',
+          'caseSensitive': '区分大小写（世界书B）',
+          'matchWholeWords': '使用全词（世界书B）',
+          'useGroupScoring': '组评分（世界书B）',
+          'matchChatMemory': '聊天记忆（世界书B）',
+          'matchCharacterDepthPrompt': '角色注记（世界书B）',
+          'matchCreatorNotes': '作者注释（世界书B）'
+        };
+
         // 包装保存器：先确保条目存在，再写值并保存
-        function makeSetter(field, originalKeyPath){
+        function makeSetter(field /*, originalKeyPath*/){
           return async (val)=>{
             // 只读模式下直接跳过写入
             try {
@@ -706,7 +742,8 @@ export async function initParamsDiff(ctx){
             const settingsRoot = (ctx.extensionSettings||window.extension_settings);
             const staging = !!settingsRoot?.['st-diff']?.worldinfo?.staging;
             if (staging){
-              try { state.stagedBooks.add(B_name); toastr?.info?.('已暂存更改（未写入磁盘）', field); } catch{}
+              const fieldDisplayName = fieldNameMap[field] || field;
+              try { state.stagedBooks.add(B_name); toastr?.info?.(`${fieldDisplayName}\n已暂存更改（未写入）`); } catch{}
               debug('staged', B_name, bEntry.uid, field, val);
             } else {
               try { await api.saveBook(B_name, B_data); } catch(e){ console.warn('[ST-Diff][paramsDiff] save error', e?.message||e); }
@@ -836,7 +873,10 @@ export async function initParamsDiff(ctx){
           ];
           headerMap.forEach(({name,text})=>{
             const $inp = $entry.find(`[name="${name}"]`).first();
-            if ($inp.length){ const $blk = findBlockForInput($inp); ensureATitleInsideBlock($blk, text, `A-${name}`); }
+            if ($inp.length){
+              const $blk = findBlockForInput($inp);
+              ensureATitleInsideBlock($blk, text, `A-${name}`);
+            }
           });
         }catch{}
 
@@ -906,11 +946,57 @@ export async function initParamsDiff(ctx){
             $row.addClass('stdiff-b-header');
             wireNumber($row, '深度', bEntry.depth, {min:0, max:100000}, makeSetter('depth'));
             try{ toggleHeaderBVisibility($entry); }catch{}
+
           };
           renderDepth();
           // 跟随“位置”变化
           $posSelA_forDepth.on('change.stdifft depthsync input.stdifft', renderDepth);
         }
+
+        // 触发策略（插入在“绿灯/状态”控件旁的同一行，位于“插入位置”左侧）
+        try{
+          const $stateSelA = $entry.find('select[name="entryStateSelector"]').first();
+          if ($stateSelA.length){
+            removeBForField($entry, 'entryStateSelector');
+            // 将A侧状态选择器包一层垂直容器，让B侧能自然出现在下方
+            let $stack = $stateSelA.parent();
+            if (!$stack.hasClass('stdiff-status-stack')){
+              $stateSelA.wrap('<div class="stdiff-status-stack" style="display:flex;flex-direction:column;gap:4px;align-items:flex-start"></div>');
+              $stack = $stateSelA.parent();
+            }
+            // B行插入到该堆叠容器中，保证上下两行（A在上，B在下）
+            const $row = insertBPlainField($stack, 'entryStateSelector');
+            $row.addClass('stdiff-b-header');
+            // 合并保存：一次性写 constant+vectorized，避免暂存模式下双toast
+            const combinedStateSetter = async ({ constant, vectorized }) => {
+              try {
+                const ro = !!((ctx.extensionSettings||window.extension_settings)?.['st-diff']?.worldinfo?.readonly);
+                if (ro) { debug('readonly, skip save for state'); return; }
+                if (!bEntry || !bEntry.uid){
+                  const entries = B_data.entries || (B_data.entries = {});
+                  let maxId = 0; Object.keys(entries).forEach(k=>{ const n = parseInt(k); if (!isNaN(n) && n>maxId) maxId=n; });
+                  const newUid = maxId + 1;
+                  const created = { uid:newUid, key:[], keysecondary:[], comment:'', content:'', order:0, depth:0, position:0, probability:100, useProbability:true, group:'', groupOverride:false, groupWeight:100, excludeRecursion:false, preventRecursion:false, selective:false, selectiveLogic:0, scanDepth:null, caseSensitive:null, matchWholeWords:null, useGroupScoring:null, delayUntilRecursion:false, sticky:null, cooldown:null, delay:null, characterFilter:{ names:[], tags:[], isExclude:false }, disable:false, addMemo:false };
+                  entries[newUid] = created; bEntry = created;
+                }
+                bEntry.constant = !!constant;
+                bEntry.vectorized = !!vectorized;
+                const settingsRoot = (ctx.extensionSettings||window.extension_settings);
+                const staging = !!settingsRoot?.['st-diff']?.worldinfo?.staging;
+                if (staging){
+                  const fieldDisplayName = fieldNameMap['constant'] || 'constant';
+                  try { state.stagedBooks.add(B_name); toastr?.info?.(`${fieldDisplayName}\n已暂存更改（未写入）`); } catch{}
+                  debug('staged', B_name, bEntry.uid, 'constant+vectorized', {constant, vectorized});
+                } else {
+                  try { await api.saveBook(B_name, B_data); } catch(e){ console.warn('[ST-Diff][paramsDiff] save error', e?.message||e); }
+                  debug('saved', B_name, bEntry.uid, 'constant+vectorized', {constant, vectorized});
+                }
+              } catch(e){ console.warn('[ST-Diff][paramsDiff] combinedStateSetter error', e); }
+            };
+            wireEntryState($row, !!bEntry.constant, !!bEntry.vectorized, null, null, combinedStateSetter, { noLabel:false });
+            try{ toggleHeaderBVisibility($entry); }catch{}
+          }
+        }catch{}
 
         // 位置（含角色）
         const $posSelA = $entry.find('select[name="position"]').first();
@@ -919,11 +1005,53 @@ export async function initParamsDiff(ctx){
           const $posBlk = findBlockForInput($posSelA);
           const $row = insertBPlainField($posBlk, 'position');
           $row.addClass('stdiff-b-header');
-          const setPosition = makeSetter('position');
-          const setRole = makeSetter('role');
           const $bPosSel = wirePosition($row, '位置', bEntry.position, bEntry.role, $posSelA, async ({ position, role })=>{
-            await setPosition(position);
-            await setRole(role);
+            // 合并 position 和 role 的保存，避免双重通知
+            const combinedSetter = async (pos, r) => {
+              try {
+                // 只读模式下直接跳过写入
+                const ro = !!((ctx.extensionSettings||window.extension_settings)?.['st-diff']?.worldinfo?.readonly);
+                if (ro) { debug('readonly, skip save for position+role'); return; }
+
+                // 首次真实修改时再创建并挂入 B.entries
+                if (!bEntry || !bEntry.uid){
+                  const entries = B_data.entries || (B_data.entries = {});
+                  let maxId = 0; Object.keys(entries).forEach(k=>{ const n = parseInt(k); if (!isNaN(n) && n>maxId) maxId=n; });
+                  const newUid = maxId + 1;
+                  const created = {
+                    uid: newUid,
+                    key: [], keysecondary: [], comment: '', content: '',
+                    order: 0, depth: 0, position: 0, probability: 100, useProbability: true,
+                    group: '', groupOverride: false, groupWeight: 100,
+                    excludeRecursion: false, preventRecursion: false,
+                    selective: false, selectiveLogic: 0,
+                    scanDepth: null, caseSensitive: null, matchWholeWords: null, useGroupScoring: null,
+                    delayUntilRecursion: false, sticky: null, cooldown: null, delay: null,
+                    characterFilter: { names:[], tags:[], isExclude:false }, disable: false, addMemo: false,
+                  };
+                  entries[newUid] = created; bEntry = created;
+                }
+
+                // 同时更新 position 和 role
+                bEntry.position = pos;
+                bEntry.role = r;
+
+                const settingsRoot = (ctx.extensionSettings||window.extension_settings);
+                const staging = !!settingsRoot?.['st-diff']?.worldinfo?.staging;
+                if (staging){
+                  const fieldDisplayName = fieldNameMap['position'] || 'position';
+                  try { state.stagedBooks.add(B_name); toastr?.info?.(`${fieldDisplayName}\n已暂存更改（未写入）`); } catch{}
+                  debug('staged', B_name, bEntry.uid, 'position+role', {pos, r});
+                } else {
+                  try { await api.saveBook(B_name, B_data); } catch(e){ console.warn('[ST-Diff][paramsDiff] save error', e?.message||e); }
+                  debug('saved', B_name, bEntry.uid, 'position+role', {pos, r});
+                }
+              } catch(e) {
+                console.warn('[ST-Diff][paramsDiff] combinedSetter error', e);
+              }
+            };
+
+            await combinedSetter(position, role);
           });
           // 同步：当 B 的 position 改变时，联动 B 侧“深度”的显示/隐藏
           try{
@@ -989,7 +1117,7 @@ export async function initParamsDiff(ctx){
           const $lab = $entry.find(`label.checkbox:has(input[name="${sel}"])`).first();
           if ($lab.length){ addInlineCheckboxAfter($lab, label, bEntry[sel], makeSetter(sel), sel); }
         });
-      
+
       } catch(e){ console.warn('[ST-Diff][paramsDiff] inject failed', e); }
         // 全局委托：当任意条目的折叠/主开关变化时，批量同步可见性
         try{

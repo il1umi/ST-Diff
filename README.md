@@ -2,7 +2,7 @@
 
 一个为 SillyTavern 设计的差异对比扩展，提供世界书条目的可视化对比、条目内容迁移功能。未来会加入预设功能。
 
-![版本](https://img.shields.io/badge/版本-1.1.0-blue.svg)
+![版本](https://img.shields.io/badge/版本-1.1.2-blue.svg)
 ![许可证](https://img.shields.io/badge/许可证-AGPL--3.0-blue.svg)
 
 ## 功能概览
