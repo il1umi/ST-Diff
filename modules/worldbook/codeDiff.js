@@ -544,6 +544,8 @@ export async function openCodeDiffDialog(ctx, aValue, bValue, opts){
       $container[0]?.style?.setProperty('--stdiff-word-bg-removed', toRGBA(cr,0.22));
       $container[0]?.style?.setProperty('--stdiff-word-underline-added', ca);
       $container[0]?.style?.setProperty('--stdiff-word-underline-removed', cr);
+      $container[0]?.style?.setProperty('--stdiff-word-color-added', ca);
+      $container[0]?.style?.setProperty('--stdiff-word-color-removed', cr);
     });
 
     // 初始化调色板
