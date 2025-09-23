@@ -2,9 +2,11 @@
 
 一个为 SillyTavern 设计的差异对比扩展，提供世界书条目的可视化对比、条目内容迁移功能。未来会加入预设功能。
 
-![版本](https://img.shields.io/badge/版本-1.1.2-blue.svg)
+![版本](https://img.shields.io/badge/版本-1.2.0-blue.svg)
 ![许可证](https://img.shields.io/badge/许可证-AGPL--3.0-blue.svg)
 
+## 致谢
+感谢类脑discord社区tera佬及折戟沉沙佬的clewd正则、jsrunner代码及思路启发对本扩展的noass功能的不可磨灭的贡献
 ## 功能概览
 
 ST-Diff 是一个专为 SillyTavern 世界书管理设计的扩展，能够：
@@ -15,6 +17,7 @@ ST-Diff 是一个专为 SillyTavern 世界书管理设计的扩展，能够：
 - **实时编辑预览** - 在对比界面中直接编辑内容，实时查看修改效果
 - **暂存模式** - 支持手动保存模式，批量提交修改，避免频繁写盘
 - **版本管理** - 支持世界书条目的版本对比和历史追踪
+- **对话压缩和世界书提取与传递** - 支持压缩消息为单条并将世界书深度条目从chathistory剥离并任意放置
 - **高度可定制** - 支持自定义颜色主题、上下文行数、词级高亮等个性化设置
 
 ## 项目结构
@@ -22,6 +25,8 @@ ST-Diff 是一个专为 SillyTavern 世界书管理设计的扩展，能够：
 ```
 ST-Diff/
 ├── modules/                           # 核心功能模块
+│   ├── noass/                         # 对话合并 & clewd 正则 & 世界书提取/剥离
+│   │   └── noass.module.js            # noass 模块主逻辑
 │   ├── worldbook/                     # 世界书对比模块
 │   │   ├── actions/                   # 操作处理器
 │   │   │   ├── hunks.js              # Hunk 操作逻辑

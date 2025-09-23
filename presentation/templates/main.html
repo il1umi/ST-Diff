@@ -10,6 +10,93 @@
         <label class="checkbox_label"><input type="checkbox" id="stdiff-enabled"> 启用本扩展</label>
       </div>
 
+      <!-- noass 配置区（noass） -->
+      <div id="stdiff-noass" class="marginTop10 marginBot10">
+        <div class="flex-container alignItemsCenter marginBot5">
+          <label class="checkbox_label"><input type="checkbox" id="stdiff-noass-enabled"> 启用 noass（对话合并与 clewd 正则）</label>
+        </div>
+
+        <div id="stdiff-noass-body">
+        <div class="flex-container alignItemsCenter marginBot5" style="column-gap:10px; row-gap:6px; flex-wrap:wrap;">
+          <label>配置模板
+            <select id="stdiff-noass-tpl-select" class="text_pole"></select>
+          </label>
+          <button class="menu_button" id="stdiff-noass-tpl-new">新建</button>
+          <button class="menu_button" id="stdiff-noass-tpl-dup">复制</button>
+          <button class="menu_button" id="stdiff-noass-tpl-rename">重命名</button>
+          <button class="menu_button" id="stdiff-noass-tpl-del">删除</button>
+          <button class="menu_button" id="stdiff-noass-tpl-save">保存当前</button>
+        </div>
+        <div class="flex-container" style="flex-wrap:wrap; column-gap:10px; row-gap:6px;">
+          <label>user
+            <input type="text" class="text_pole" id="stdiff-noass-user" placeholder="Human">
+          </label>
+          <label>assistant
+            <input type="text" class="text_pole" id="stdiff-noass-assistant" placeholder="Assistant">
+          </label>
+          <label>system
+            <input type="text" class="text_pole" id="stdiff-noass-system" placeholder="SYSTEM">
+          </label>
+          <label>separator_system
+            <input type="text" class="text_pole" id="stdiff-noass-sep-system" placeholder="例如：<SYS/>">
+          </label>
+          <label>prefill_user
+            <input type="text" class="text_pole" id="stdiff-noass-prefill" placeholder="Continue the conversation.">
+          </label>
+        </div>
+
+        <hr class="marginTop10 marginBot10">
+
+        <div class="flex-container alignItemsCenter marginBot5" style="column-gap:10px;">
+          <label class="checkbox_label"><input type="checkbox" id="stdiff-noass-cap-enabled"> 启用数据捕获</label>
+          <button class="menu_button" id="stdiff-noass-add-rule">添加规则</button>
+          <button class="menu_button" id="stdiff-noass-save-rules">保存规则</button>
+        </div>
+        <div id="stdiff-noass-rules" class="marginTop5" style="display:grid; row-gap:6px;"></div>
+
+        <div class="flex-container alignItemsCenter marginTop10" style="column-gap:10px;">
+          <button class="menu_button" id="stdiff-noass-storage-refresh">刷新存储查看</button>
+          <button class="menu_button" id="stdiff-noass-storage-clear">清空所有存储数据</button>
+        </div>
+        <div id="stdiff-noass-storage-list" class="marginTop5" style="display:grid; row-gap:8px;"></div>
+        <hr class="marginTop10 marginBot10">
+        <h4 class="textAlignCenter marginTop5 marginBot5">提取世界书并传递</h4>
+        <div class="flex-container alignItemsCenter" style="column-gap:10px; row-gap:6px; flex-wrap:wrap;">
+          <label>组
+            <select id="stdiff-noass-wi-group-select" class="text_pole" style="min-width:120px;"></select>
+          </label>
+          <button class="menu_button" id="stdiff-noass-wi-group-new">新建组</button>
+          <button class="menu_button" id="stdiff-noass-wi-group-copy">复制组</button>
+          <button class="menu_button" id="stdiff-noass-wi-group-rename">重命名组</button>
+          <button class="menu_button" id="stdiff-noass-wi-group-del">删除组</button>
+          <button class="menu_button" id="stdiff-noass-wi-group-save">保存组</button>
+        </div>
+        <div class="flex-container alignItemsCenter" style="column-gap:10px; row-gap:6px; flex-wrap:wrap;">
+          <label class="checkbox_label"><input type="checkbox" id="stdiff-noass-wi-enabled"> 启用提取</label>
+          <label class="checkbox_label"><input type="radio" name="stdiff-noass-wi-mode" value="threshold" checked> 深度 ≥</label>
+          <input type="number" class="text_pole" id="stdiff-noass-wi-threshold" value="2" min="0" style="max-width:100px;">
+          <label class="checkbox_label"><input type="radio" name="stdiff-noass-wi-mode" value="pick"> 输入深度（每行一个）：</label>
+          <textarea id="stdiff-noass-wi-picks" class="text_pole" style="width:120px; height:90px;" placeholder="2\n3\n4"></textarea>
+          <label>目标标签 <input type="text" class="text_pole" id="stdiff-noass-wi-tag" value="<A_TRANS>"></label>
+          <label>策略
+            <select id="stdiff-noass-wi-strategy" class="text_pole">
+              <option value="extract_only">仅提取不删除</option>
+              <option value="extract_and_strip">提取并从消息中剥离</option>
+            </select>
+          </label>
+          <label class="checkbox_label"><input type="checkbox" id="stdiff-noass-wi-collapse"> 剥离处折叠空行</label>
+        </div>
+
+        <hr class="marginTop10 marginBot10">
+        <h4 class="textAlignCenter marginTop5 marginBot5">白名单</h4>
+        <div class="flex-container alignItemsCenter marginBot5" style="column-gap:10px; row-gap:6px; flex-wrap:wrap;">
+          <button class="menu_button" id="stdiff-noass-wl-add">添加白名单</button>
+          <button class="menu_button" id="stdiff-noass-wl-save">保存白名单</button>
+        </div>
+        <div id="stdiff-noass-wl" style="display:grid; row-gap:6px;"></div>
+        </div>
+      </div>
+
       <!-- 以下为占位，将在后续启用 -->
       <div class="st-diff-toolbar" style="display:none">
         <label>视图：
