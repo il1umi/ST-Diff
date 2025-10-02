@@ -351,26 +351,25 @@ async function openPanel(ctx) {
     $box.find('#stdiff-noass-tpl-save').after(btnImport).after(btnExport);
 
     btnExport.on('click', ()=>{
-      // 导出包含 noass 下所有配置（包含 templates 与 whitelists）
+      // 导出“当前选中的模板”与其白名单（不导出全部模板，避免覆盖他人现有模板集）
       const slot = getSlot();
+      const activeName = getActiveName();
+      const tpl = ensureTemplate(activeName);
+      const wl = (slot.whitelists && slot.whitelists[activeName]) || [];
       const payload = {
-        noass: {
-          enabled: slot.enabled !== false,
-          templates: slot.templates || {},
-          active: slot.active || '默认',
-          whitelists: slot.whitelists || {},
-          capture_enabled: slot.capture_enabled !== false,
-          capture_rules: slot.capture_rules || [],
-          stored_data: slot.stored_data || {},
+        version: 1,
+        noass_template: {
+          name: activeName,
+          template: tpl,
+          whitelist: wl,
         }
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      // 使用活动模板名称作为文件名后缀
-      const activeName = (slot.active || 'default') + '';
-      const safe = activeName.replace(/[\\/:*?"<>|]/g, '_');
-      a.href = url; a.download = `ST-diff-noass-${safe}.json`; a.click();
+      // 使用活动模板名称作为文件名
+      const safe = String(activeName || 'template').replace(/[\\/:*?"<>|]/g, '_');
+      a.href = url; a.download = `ST-diff-noass-tpl-${safe}.json`; a.click();
       URL.revokeObjectURL(url);
     });
 
@@ -382,19 +381,54 @@ async function openPanel(ctx) {
         try {
           const text = await file.text();
           const json = JSON.parse(text);
-          if (!json || !json.noass) { alert('无效的配置文件'); return; }
           const slot = getSlot();
-          // 合并导入（不覆盖未提供字段）
-          slot.enabled = json.noass.enabled ?? slot.enabled;
-          slot.templates = json.noass.templates || slot.templates || {};
-          slot.active = json.noass.active || slot.active || '默认';
-          slot.whitelists = json.noass.whitelists || slot.whitelists || {};
-          slot.capture_enabled = json.noass.capture_enabled ?? slot.capture_enabled;
-          slot.capture_rules = Array.isArray(json.noass.capture_rules) ? json.noass.capture_rules : slot.capture_rules;
-          slot.stored_data = json.noass.stored_data || slot.stored_data || {};
+          // 准备容器
+          slot.templates = slot.templates || {};
+          slot.whitelists = slot.whitelists || {};
+          const t = slot.templates;
+
+          // 生成不重名的模板名
+          const makeUnique = (base)=>{
+            let name = String(base || '导入配置').trim() || '导入配置';
+            if (!t[name]) return name;
+            let i = 1;
+            while (t[`${name}-${i}`]) i++;
+            return `${name}-${i}`;
+          };
+
+          const importedNames = [];
+
+          // 新格式：仅导入单个模板
+          if (json && json.noass_template){
+            const nameRaw = json.noass_template.name || '导入配置';
+            const unique = makeUnique(nameRaw);
+            t[unique] = json.noass_template.template || {};
+            slot.whitelists[unique] = Array.isArray(json.noass_template.whitelist) ? json.noass_template.whitelist : [];
+            setActiveName(unique);
+            importedNames.push(unique);
+          }
+          // 兼容旧格式：包含整个 noass 对象（合并导入所有模板，绝不覆盖现有集合）
+          else if (json && json.noass){
+            const srcTemplates = json.noass.templates || {};
+            const srcWhitelists = json.noass.whitelists || {};
+            for (const [name, tpl] of Object.entries(srcTemplates)){
+              const unique = makeUnique(name);
+              t[unique] = tpl || {};
+              if (Array.isArray(srcWhitelists[name])) slot.whitelists[unique] = srcWhitelists[name];
+              importedNames.push(unique);
+            }
+            // 保持现有 enabled/capture_* 等设置不变，避免覆盖；仅在成功导入时选中新模板
+            if (importedNames.length){
+              setActiveName(importedNames[importedNames.length - 1]);
+            }
+          } else {
+            alert('无效的配置文件');
+            return;
+          }
+
           saveDebounced();
           refreshTplOptions(); loadTemplateToUI(getActiveName()); renderRules(); renderWhitelist();
-          try{ toastr?.success?.('导入成功'); }catch{}
+          try{ toastr?.success?.(`导入成功：${importedNames.join(', ')}`); }catch{}
         } catch(e){ alert('导入失败：'+e); }
       };
       input.click();
