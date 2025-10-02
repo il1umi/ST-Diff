@@ -71,6 +71,12 @@ async function openPanel(ctx) {
     const $wiTag = $box.find('#stdiff-noass-wi-tag');
     const $wiStrategy = $box.find('#stdiff-noass-wi-strategy');
     const $wiCollapse = $box.find('#stdiff-noass-wi-collapse');
+
+    // 新增：行为配置勾选
+    const $singleUser = $box.find('#stdiff-noass-single-user');
+    const $cleanClewd = $box.find('#stdiff-noass-clean-clewd');
+    const $injectPrefill = $box.find('#stdiff-noass-inject-prefill');
+
     // 组控件
     const $wiGroupSel = $box.find('#stdiff-noass-wi-group-select');
     const $wiGroupNew = $box.find('#stdiff-noass-wi-group-new');
@@ -95,6 +101,15 @@ async function openPanel(ctx) {
       if (!t[name]){
         t[name] = {
           user:'Human', assistant:'Assistant', system:'SYSTEM', separator_system:'', prefill_user:'Continue the conversation.',
+
+          // 新增：行为配置默认值
+          // single_user_enabled: 是否将合并输出作为单条 user 消息
+          single_user_enabled: false,
+          // replace_strategy: 'config_tags_clean'（acheron式清理未命中标签）或 'stored_only'（仅替换已存数据标签）
+          replace_strategy: 'config_tags_clean',
+          // inject_prefill_message: 是否在合并块前注入预填充 user 消息（acheron=true；单user建议false）
+          inject_prefill_message: true,
+
           // 让“提取世界书并传递”按模板隔离
           wi_extract_enabled:false,
           wi_depth_mode:'threshold',
@@ -110,6 +125,12 @@ async function openPanel(ctx) {
     function loadTemplateToUI(name){
       const t=ensureTemplate(name);
       $user.val(t.user||''); $asst.val(t.assistant||''); $sys.val(t.system||''); $sepSys.val(t.separator_system||''); $prefill.val(t.prefill_user||'');
+
+      // 新增：行为配置初始化
+      $singleUser.prop('checked', !!t.single_user_enabled);
+      $cleanClewd.prop('checked', (t.replace_strategy || 'config_tags_clean') === 'config_tags_clean');
+      $injectPrefill.prop('checked', t.inject_prefill_message !== false);
+
       // 组下拉
       const groups = Array.isArray(t.wi_groups) ? t.wi_groups : (t.wi_groups=[]);
       $wiGroupSel.empty();
@@ -121,6 +142,12 @@ async function openPanel(ctx) {
     function saveUIToTemplate(name){
       const t=ensureTemplate(name);
       t.user=$user.val(); t.assistant=$asst.val(); t.system=$sys.val(); t.separator_system=$sepSys.val(); t.prefill_user=$prefill.val();
+
+      // 新增：行为配置保存
+      t.single_user_enabled = $singleUser.prop('checked');
+      t.replace_strategy = $cleanClewd.prop('checked') ? 'config_tags_clean' : 'stored_only';
+      t.inject_prefill_message = $injectPrefill.prop('checked');
+
       // 保存当前组
       saveGroupFromUI(Number($wiGroupSel.val()||0));
       saveDebounced();
@@ -138,6 +165,12 @@ async function openPanel(ctx) {
     $en.on('change', ()=>{ getSlot().enabled = $en.prop('checked'); saveDebounced(); updateModulesVisibility(ctx); toggleNoassBody(); });
     const bindText = ($el, key)=> $el.on('input', ()=>{ saveUIToTemplate(getActiveName()); });
     bindText($user,'user'); bindText($asst,'assistant'); bindText($sys,'system'); bindText($sepSys,'separator_system'); bindText($prefill,'prefill_user');
+
+    // 新增：行为配置变更即存
+    $singleUser.on('change', ()=>{ saveUIToTemplate(getActiveName()); });
+    $cleanClewd.on('change', ()=>{ saveUIToTemplate(getActiveName()); });
+    $injectPrefill.on('change', ()=>{ saveUIToTemplate(getActiveName()); });
+
     // 模板事件
     $tplSel.on('change', ()=>{ setActiveName($tplSel.val()); loadTemplateToUI(getActiveName()); });
     $tplNew.on('click', ()=>{ const base='配置'; let i=1; const t=getTemplates(); while (t[base+i]) i++; t[base+i]={ user:'Human', assistant:'Assistant', system:'SYSTEM', separator_system:'', prefill_user:'Continue the conversation.' }; setActiveName(base+i); refreshTplOptions(); loadTemplateToUI(getActiveName()); });

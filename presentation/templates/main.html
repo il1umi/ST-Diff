@@ -47,6 +47,13 @@
 
         <hr class="marginTop10 marginBot10">
 
+        <!-- 行为设置：单user / clewd空清理 / 预填充注入 -->
+        <div class="flex-container alignItemsCenter marginBot5" style="column-gap:10px; row-gap:6px; flex-wrap:wrap;">
+          <label class="checkbox_label"><input type="checkbox" id="stdiff-noass-single-user"> 启用单user</label>
+          <label class="checkbox_label"><input type="checkbox" id="stdiff-noass-clean-clewd" checked> 清理空clewd正则</label>
+          <label class="checkbox_label"><input type="checkbox" id="stdiff-noass-inject-prefill" checked> 注入user预填充消息</label>
+        </div>
+
         <div class="flex-container alignItemsCenter marginBot5" style="column-gap:10px;">
           <label class="checkbox_label"><input type="checkbox" id="stdiff-noass-cap-enabled"> 启用数据捕获</label>
           <button class="menu_button" id="stdiff-noass-add-rule">添加规则</button>

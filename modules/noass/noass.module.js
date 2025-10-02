@@ -17,6 +17,15 @@ function ensureConfig(ctx){
     separator: '',
     separator_system: '',
     prefill_user: 'Continue the conversation.',
+
+    // 行为配置默认值
+    // 是否将合并输出作为单条 user 消息
+    single_user_enabled: false,
+    // 标签替换策略：'config_tags_clean'（按 capture_rules 清理未命中标签）或 'stored_only'（仅替换已存数据标签）
+    replace_strategy: 'config_tags_clean',
+    // 是否在合并块前注入预填充 user 消息（acheron=true；单user模式下忽略）
+    inject_prefill_message: true,
+
     capture_enabled: true,
     capture_rules: [],
     stored_data: {},
@@ -135,6 +144,52 @@ function replaceTagsWithStoredData(ctx, content, cfg, extraMap){
     out = out.replace(new RegExp(escapeRegExp(tag), 'g'), repl);
   }
   return out;
+}
+
+/**
+* 仅按 stored_data 与 extraMap 替换标签，不清理未命中标签
+* @param {*} ctx
+* @param {string} content
+* @param {Record<string,string>=} extraMap 额外替换映射（世界书插入等）
+* @returns {string}
+*/
+function replaceTagsStoredOnly(ctx, content, extraMap){
+ const stored = getStoredData(ctx);
+ let out = String(content || '');
+ // 先替换 stored_data 的 key
+ Object.keys(stored || {}).forEach(tag => {
+   if (!tag) return;
+   const arr = stored[tag];
+   if (!Array.isArray(arr) || !arr.length) return;
+   const repl = arr.join('\n');
+   out = out.replace(new RegExp(escapeRegExp(tag), 'g'), repl);
+ });
+ // 再替换 extraMap（若提供）
+ if (extraMap && typeof extraMap === 'object'){
+   for (const k of Object.keys(extraMap)){
+     const v = String(extraMap[k] ?? '');
+     out = out.replace(new RegExp(escapeRegExp(k), 'g'), v);
+   }
+ }
+ return out;
+}
+
+/**
+* 策略分发：config_tags_clean（按 capture_rules 清理未命中标签）或 stored_only（仅替换已存数据标签）
+* @param {*} ctx
+* @param {string} content
+* @param {*} cfg
+* @param {'config_tags_clean'|'stored_only'} strategy
+* @param {Record<string,string>=} extraMap
+* @returns {string}
+*/
+function replaceByStrategy(ctx, content, cfg, strategy, extraMap){
+ const s = (strategy || 'config_tags_clean');
+ if (s === 'stored_only'){
+   return replaceTagsStoredOnly(ctx, content, extraMap);
+ }
+ // 默认：沿用现有行为（按 capture_rules 清理未命中标签；支持 extraMap）
+ return replaceTagsWithStoredData(ctx, content, cfg, extraMap);
 }
 
 // ============= 文本处理 =============
@@ -448,6 +503,10 @@ export async function mount(ctx){
           whitelist: (cfg.whitelists && cfg.whitelists[activeName]) ? cfg.whitelists[activeName] : [],
         }];
       }
+      // 读取行为配置（模板优先，回退全局）
+      const singleUserEnabled = (tpl.single_user_enabled ?? cfg.single_user_enabled) ?? false;
+      const replaceStrategy = (tpl.replace_strategy || cfg.replace_strategy) || 'config_tags_clean';
+      const injectPrefill = (tpl.inject_prefill_message ?? cfg.inject_prefill_message);
       const enabledGroups = wiGroups.filter(g=> g && g.extract_enabled !== false && typeof g.target_tag === 'string' && g.target_tag.length).map((g,i)=>({ ...g, __idx:i }));
       const tagList = [];
       const groupTextMap = {};
@@ -512,8 +571,9 @@ export async function mount(ctx){
         const mergedAssistantMessage = processExact(ap, block);
         if (mergedAssistantMessage && mergedAssistantMessage.content){
           let content = mergedAssistantMessage.content;
-          // 在合并阶段仅处理“数据捕获规则”的标签，避免提前把世界书目标标签内容注入
-          content = replaceTagsWithStoredData(ctx, content, cfg, null);
+          // 在合并阶段按策略处理“数据捕获规则”的标签，避免提前把世界书目标标签内容注入
+          content = replaceByStrategy(ctx, content, cfg, replaceStrategy, null);
+
           // 系统分离
           let systemMsg = null;
           const sepSys = ap.separator_system || cfg.separator_system || '';
@@ -526,10 +586,18 @@ export async function mount(ctx){
             }
           }
           if (systemMsg) finalMessages.push(systemMsg);
-          // 预填充 user
-          const prefill = (ap.prefill_user ?? cfg.prefill_user) || 'Continue the conversation.';
-          finalMessages.push({ role:'user', content: prefill });
-          finalMessages.push({ role:'assistant', content });
+
+          if (singleUserEnabled) {
+            // 单 user 模式：直接将合并后的内容作为 user
+            finalMessages.push({ role:'user', content });
+          } else {
+            // 默认（acheron）模式
+            if (injectPrefill !== false) {
+              const prefill = (ap.prefill_user ?? cfg.prefill_user) || 'Continue the conversation.';
+              finalMessages.push({ role:'user', content: prefill });
+            }
+            finalMessages.push({ role:'assistant', content });
+          }
         }
       }
 
@@ -547,8 +615,8 @@ export async function mount(ctx){
           const cleaned = { role: message.role, content: cleanedContent };
           // 保留消息也进行系统分离与占位替换
           if (cleaned.content){
-            // 保留消息也仅处理“数据捕获规则”的标签
-            let remaining = replaceTagsWithStoredData(ctx, cleaned.content, cfg, null);
+            // 保留消息也仅处理“数据捕获规则”的标签（按策略）
+            let remaining = replaceByStrategy(ctx, cleaned.content, cfg, replaceStrategy, null);
             if (cfg.separator_system && cleaned.role === 'system'){
               const idx = remaining.indexOf(cfg.separator_system);
               if (idx>0){
@@ -586,8 +654,8 @@ export async function mount(ctx){
             if (nv!==m.content){ m.content = nv; replacedAny=true; }
           }
         }
-        // 再处理“数据捕获规则”的标签
-        m.content = replaceTagsWithStoredData(ctx, m.content, cfg, null);
+        // 再处理“数据捕获规则”的标签（按策略）
+        m.content = replaceByStrategy(ctx, m.content, cfg, replaceStrategy, null);
       }
 
       // 按组剥离阶段。随后统一清理 BEGIN/END 标记
