@@ -568,25 +568,76 @@ export async function mount(ctx){
         // 合并
         // 保证 clewd 正则行为
         const ap = activePrefixes();
-        const mergedAssistantMessage = processExact(ap, block);
+        // 为正式对话楼层包裹锚点，保护边界与角色（仅 user/assistant）
+        const markedBlock = block.map((m, i) => {
+          const r = String(m?.role || 'user').toLowerCase();
+          const isDlg = r === 'user' || r === 'assistant';
+          const roleTag = r === 'assistant' ? 'ASSISTANT' : 'USER';
+          const begin = isDlg ? `<<NOASS_ROLE_BEGIN_${i}_${roleTag}>>` : '';
+          const end = isDlg ? `<<NOASS_ROLE_END_${i}>>` : '';
+          const mc = String(m?.content || '');
+          return isDlg ? { ...m, content: `${begin}${mc}${end}` } : m;
+        });
+        const mergedAssistantMessage = processExact(ap, markedBlock);
         if (mergedAssistantMessage && mergedAssistantMessage.content){
           let content = mergedAssistantMessage.content;
           // 在合并阶段按策略处理“数据捕获规则”的标签，避免提前把世界书目标标签内容注入
           content = replaceByStrategy(ctx, content, cfg, replaceStrategy, null);
-
-          // 系统分离
-          let systemMsg = null;
-          const sepSys = ap.separator_system || cfg.separator_system || '';
-          if (sepSys){
-            const idx = content.indexOf(sepSys);
-            if (idx > 0){
-              const sys = content.substring(0, idx + sepSys.length);
-              content = content.substring(idx + sepSys.length);
-              systemMsg = { role:'system', content: sys };
+  
+          /* 系统分离在锚点重建阶段处理（仅首个楼层锚点之前的前缀区域） */
+  
+          // 基于楼层锚点重建正式对话串，并进行系统分离与标记清理
+          try {
+            const dUser = ap.user || 'Human';
+            const dAsst = ap.assistant || 'Assistant';
+            const u = escapeRegExp(dUser);
+            const a = escapeRegExp(dAsst);
+            // 1) 以首个楼层锚点为界，分离前缀
+            let prefixText = '';
+            let bodyText = content;
+            const firstBeginMatch = bodyText.match(/<<NOASS_ROLE_BEGIN_\d+_(?:USER|ASSISTANT)>>/);
+            if (firstBeginMatch) {
+              const firstIdx = bodyText.indexOf(firstBeginMatch[0]);
+              prefixText = bodyText.substring(0, firstIdx);
+              bodyText = bodyText.substring(firstIdx);
             }
-          }
-          if (systemMsg) finalMessages.push(systemMsg);
-
+            // 2) 解析并重建每个楼层段（严格按照锚点顺序与角色）
+            const segRe = /<<NOASS_ROLE_BEGIN_(\d+)_(USER|ASSISTANT)>>([\s\S]*?)<<NOASS_ROLE_END_\1>>/g;
+            const rebuiltSegs = [];
+            let mm;
+            while ((mm = segRe.exec(bodyText)) !== null) {
+              const roleLabel = mm[2] === 'ASSISTANT' ? dAsst : dUser;
+              const text = String(mm[3] || '').trim();
+              rebuiltSegs.push(`${roleLabel}: ${text}`);
+            }
+            if (rebuiltSegs.length) {
+              content = '\n\n' + rebuiltSegs.join('\n\n');
+            }
+            // 3) 前缀区域内进行系统分离（仅首楼层之前）
+            let systemMsg = null;
+            const sepSys = ap.separator_system || cfg.separator_system || '';
+            if (sepSys && prefixText) {
+              const idx = prefixText.indexOf(sepSys);
+              if (idx > 0) {
+                const sys = prefixText.substring(0, idx + sepSys.length);
+                prefixText = prefixText.substring(idx + sepSys.length);
+                systemMsg = { role: 'system', content: sys };
+              }
+            }
+            if (systemMsg) {
+              finalMessages.push(systemMsg);
+            }
+            // 4) 将前缀余留（如果有的话）并入对话串开头，保持双换行分隔
+            if (prefixText && prefixText.trim()) {
+              const head = content.startsWith('\n\n') ? '' : '\n\n';
+              content = head + prefixText.trim() + (content ? '\n\n' + content.trim() : '');
+            }
+            // 5) 清理锚点标记残留
+            content = content
+              .replace(/<<NOASS_ROLE_BEGIN_\d+_(?:USER|ASSISTANT)>>/g, '')
+              .replace(/<<NOASS_ROLE_END_\d+>>/g, '');
+          } catch {}
+  
           if (singleUserEnabled) {
             // 单 user 模式：直接将合并后的内容作为 user
             finalMessages.push({ role:'user', content });
