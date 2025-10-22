@@ -4,11 +4,90 @@
 #st-diff .st-diff-left, #st-diff .st-diff-center, #st-diff .st-diff-right { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 8px; }
 #st-diff .st-diff-view { min-height: 240px; }
 
-
-
-/* 避免酒馆的全局样式导致的按钮中文文字断行的竖排文字效果 */
+/* 通用按钮防竖排 */
 #st-diff .menu_button { width: auto; white-space: nowrap; }
-#stdiff-worldbook-panel .menu_button { width: auto; white-space: nowrap; display: inline-flex; align-items: center; }
-#stdiff-worldbook-panel .stdiff-row label { white-space: nowrap; }
-#stdiff-worldbook-panel .stdiff-row select { min-width: 260px; }
 
+/* 世界书面板 */
+#stdiff-noass-worldbook { gap: 16px; }
+#st-diff .stdiff-worldbook-header { display: flex; flex-direction: column; gap: 10px; }
+#st-diff .stdiff-worldbook-title { font-weight: 600; font-size: 16px; }
+
+#st-diff .stdiff-worldbook-header-controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: space-between; }
+#st-diff .stdiff-worldbook-nav-buttons { gap: 6px; }
+#st-diff .stdiff-worldbook-index { font-weight: 600; min-width: 72px; text-align: center; display: inline-flex; justify-content: center; align-items: center; }
+
+#st-diff .stdiff-worldbook-overview { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+#st-diff .stdiff-worldbook-overview input[type="text"],
+#st-diff .stdiff-worldbook-overview input[type="number"] { width: auto; min-width: 120px; }
+#st-diff .stdiff-worldbook-overview .checkbox_label { white-space: nowrap; }
+
+#st-diff .stdiff-worldbook-summary { border: 1px dashed var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 6px 10px; font-size: 13px; opacity: .8; min-height: 24px; }
+
+#st-diff .stdiff-worldbook-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+#st-diff .stdiff-worldbook-column { display: flex; flex-direction: column; gap: 16px; }
+
+#st-diff .stdiff-fieldset { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.08); }
+#st-diff .stdiff-fieldset-title { font-weight: 600; }
+
+#st-diff .stdiff-worldbook-mode { display: flex; flex-direction: column; gap: 6px; }
+#st-diff .stdiff-worldbook-depth-inputs { display: grid; gap: 8px 12px; grid-template-columns: repeat(2, minmax(120px, 1fr)); align-items: center; }
+#st-diff .stdiff-worldbook-depth-inputs label { display: flex; align-items: center; }
+#st-diff .stdiff-worldbook-depth-extra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#st-diff .stdiff-worldbook-depth-extra input { flex: 1; min-width: 160px; }
+#st-diff .stdiff-worldbook-depth-max-label { display: flex; align-items: center; }
+#st-diff .stdiff-worldbook-clean { margin-top: 6px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+#st-diff .stdiff-worldbook-depth-chips,
+#st-diff .stdiff-taglist { display: flex; flex-wrap: wrap; gap: 8px; }
+#st-diff .stdiff-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 14px; border: 1px solid var(--SmartThemeBorderColor, #444); background: rgba(0,0,0,0.12); font-size: 12px; }
+#st-diff .stdiff-tag button { border: none; background: transparent; color: inherit; cursor: pointer; padding: 0 2px; font-size: 12px; }
+
+#st-diff .stdiff-worldbook-whitelist-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#st-diff .stdiff-worldbook-whitelist-actions input { flex: 1; min-width: 160px; }
+
+#st-diff .stdiff-tag.active { background: var(--SmartThemeAccentColor, #3a7bd5); color: #fff; border-color: var(--SmartThemeAccentColor, #3a7bd5); }
+#st-diff .stdiff-tag.active button { color: #fff; }
+
+#st-diff .stdiff-worldbook-snapshot { font-size: 12px; opacity: .8; border-radius: 4px; background: rgba(0,0,0,0.05); padding: 6px 8px; min-height: 32px; }
+#st-diff .stdiff-worldbook-footer { display: flex; flex-wrap: wrap; gap: 8px; }
+#st-diff .stdiff-worldbook-log { max-height: 160px; overflow: auto; background: rgba(0,0,0,0.1); border-radius: 4px; padding: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+
+#st-diff .stdiff-worldbook-debug { white-space: nowrap; }
+#st-diff .stdiff-worldbook-depth-chips button,
+#st-diff .stdiff-tag button { color: var(--SmartThemeAccentColor, #9cf); }
+
+/* noass 配置区域样式 */
+#st-diff .stdiff-section { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 8px; padding: 12px; margin: 10px 0 16px; background: rgba(0,0,0,0.15); }
+#st-diff .stdiff-section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+#st-diff .stdiff-section-body { display: flex; flex-direction: column; gap: 14px; }
+
+#st-diff .stdiff-noass-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+#st-diff .stdiff-noass-label { font-weight: 600; min-width: 72px; }
+#st-diff .stdiff-noass-line select { min-width: 160px; max-width: 200px; }
+
+#st-diff .stdiff-noass-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+#st-diff .stdiff-noass-grid { display: grid; gap: 8px 14px; grid-template-columns: minmax(150px, 180px) minmax(240px, 1fr); }
+#st-diff .stdiff-noass-grid label { display: flex; align-items: center; }
+#st-diff .stdiff-noass-grid input { width: 100%; }
+
+#st-diff .stdiff-noass-checks { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+
+#st-diff .stdiff-noass-block { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.12); }
+#st-diff .stdiff-noass-block-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#st-diff .stdiff-noass-rules,
+#st-diff .stdiff-noass-storage { display: flex; flex-direction: column; gap: 10px; }
+
+#st-diff .stdiff-noass-empty { opacity: 0.65; font-style: italic; text-align: center; padding: 6px 0; }
+#st-diff .stdiff-noass-rule-row { display: flex; flex-wrap: wrap; gap: 12px; border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.08); }
+#st-diff .stdiff-noass-rule-left { display: flex; flex-direction: column; gap: 8px; min-width: 120px; }
+#st-diff .stdiff-noass-rule-right { flex: 1; display: grid; gap: 8px 12px; grid-template-columns: minmax(140px, 180px) minmax(180px, 1fr); }
+#st-diff .stdiff-noass-field { display: flex; flex-direction: column; gap: 4px; }
+#st-diff .stdiff-noass-field > span { font-size: 13px; opacity: .8; }
+
+#st-diff .stdiff-noass-storage-item { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.08); }
+#st-diff .stdiff-noass-storage-title { font-weight: 600; }
+#st-diff .stdiff-noass-storage-text { width: 100%; min-height: 80px; resize: vertical; }
+#st-diff .stdiff-noass-btns .menu_button { display: inline-flex; align-items: center; justify-content: center; }
+
+/* 当 noass 主体隐藏时 */
+#st-diff .stdiff-section-body[style*="display: none"] { display: none !important; }
