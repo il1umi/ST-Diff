@@ -47,7 +47,342 @@ const worldbookState = {
   lastUpdated: 0,
   initialized: false,
   debug: false,
+  regexHelpers: null,
 };
+
+const DRY_RUN_STATUS = Object.freeze({
+  PENDING: 'pending',
+  SUCCESS: 'success',
+  FALLBACK: 'fallback',
+  FAILED: 'failed',
+});
+
+function makeDryRunEntryKey(entry, depth, order, messageIndex) {
+  if (entry?.uid !== undefined && entry?.uid !== null) {
+    return String(entry.uid);
+  }
+  const depthPart = Number.isFinite(depth) ? depth : 'na';
+  const orderPart = Number.isFinite(order) ? order : 'na';
+  const messagePart = Number.isInteger(messageIndex) ? messageIndex : 'na';
+  return `depth${depthPart}-order${orderPart}-msg${messagePart}`;
+}
+
+function updateDryRunEntryStatus(group, entryKey, status, extra = {}) {
+  if (!isDryRunActive()) return;
+  const report = ensureDryRunGroupReport(group);
+  if (!report || !entryKey) return;
+
+  const idx = report.entryIndexByUid?.[entryKey];
+  if (typeof idx === 'undefined') {
+    return;
+  }
+
+  const record = report.entries?.[idx];
+  if (!record) return;
+
+  if (status && DRY_RUN_STATUS[status.toUpperCase?.()] !== undefined) {
+    record.status = status;
+  }
+
+  if (typeof extra.anchor !== 'undefined') {
+    record.targetAnchor = extra.anchor;
+  }
+  if (typeof extra.role !== 'undefined') {
+    record.targetRole = extra.role;
+  }
+  if (typeof extra.reason !== 'undefined') {
+    record.reason = extra.reason || null;
+  }
+  if (typeof extra.preview !== 'undefined') {
+    record.preview = extra.preview || null;
+  }
+
+  if (Array.isArray(report.failures)) {
+    const failureIndex = report.failures.indexOf(record);
+    const shouldTrackFailure =
+      status === DRY_RUN_STATUS.FAILED || status === DRY_RUN_STATUS.FALLBACK;
+    if (shouldTrackFailure && failureIndex === -1) {
+      report.failures.push(record);
+    } else if (!shouldTrackFailure && failureIndex !== -1) {
+      report.failures.splice(failureIndex, 1);
+    }
+  }
+}
+
+function collectGroupMatchedEntries(group) {
+  if (!group?.matches || !(group.matches instanceof Map)) {
+    return [];
+  }
+  const keys = [];
+  for (const [, matchInfo] of group.matches.entries()) {
+    if (!matchInfo || !Array.isArray(matchInfo.entries)) continue;
+    for (const entry of matchInfo.entries) {
+      const entryKey = entry?.entryKey;
+      if (entryKey && !keys.includes(entryKey)) {
+        keys.push(entryKey);
+      }
+    }
+  }
+  return keys;
+}
+
+let regexHelpersPromise = null;
+
+async function ensureRegexHelpers(ctx) {
+  if (worldbookState.regexHelpers) {
+    return worldbookState.regexHelpers;
+  }
+  if (!regexHelpersPromise) {
+    regexHelpersPromise = (async () => {
+      try {
+        const module = await import('../../../../regex/engine.js');
+        if (module?.getRegexedString && module?.regex_placement) {
+          return {
+            getRegexedString: module.getRegexedString,
+            regex_placement: module.regex_placement,
+          };
+        }
+      } catch (error) {
+        console.warn('[ST-Diff][noass] regex 引擎加载失败', error);
+      }
+      return null;
+    })();
+  }
+  const helpers = await regexHelpersPromise;
+  regexHelpersPromise = null;
+  if (helpers) {
+    worldbookState.regexHelpers = helpers;
+  }
+  return worldbookState.regexHelpers;
+}
+
+function computeWorldbookPromptContent(rawContent, depth) {
+  const helpers = worldbookState.regexHelpers;
+  if (!helpers?.getRegexedString || typeof rawContent !== 'string') {
+    return rawContent ?? '';
+  }
+  try {
+    return helpers.getRegexedString(rawContent, helpers.regex_placement.WORLD_INFO, {
+      depth,
+      isPrompt: true,
+    });
+  } catch (error) {
+    console.warn('[ST-Diff][noass] regex 展开失败', { depth, error });
+    return rawContent;
+  }
+}
+
+function summarizeTextForDiagnostics(text, length = 80) {
+  if (typeof text !== 'string') {
+    return '';
+  }
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+  return normalized.length > length ? `${normalized.slice(0, length)}…` : normalized;
+}
+
+function captureContextPreview(containerText, segmentText, { before = 60, after = 60 } = {}) {
+  if (typeof containerText !== 'string' || typeof segmentText !== 'string') {
+    return null;
+  }
+  const target = segmentText.trim();
+  if (!target) {
+    return null;
+  }
+
+  const normalizedContainer = containerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const normalizedTarget = target.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  let index = normalizedContainer.indexOf(normalizedTarget);
+  if (index === -1) {
+    // 若未找到完整匹配，尝试忽略首尾空白或仅使用首行
+    const firstLine = normalizedTarget.split('\n').map(line => line.trim()).find(Boolean);
+    if (firstLine) {
+      index = normalizedContainer.indexOf(firstLine);
+      if (index !== -1) {
+        const start = Math.max(0, index - before);
+        const end = Math.min(normalizedContainer.length, index + firstLine.length + after);
+        const prefix = start > 0 ? '…' : '';
+        const suffix = end < normalizedContainer.length ? '…' : '';
+        return `${prefix}${normalizedContainer.slice(start, index)}[<<${normalizedContainer.slice(index, index + firstLine.length)}>>]${normalizedContainer.slice(index + firstLine.length, end)}${suffix}`;
+      }
+    }
+    return summarizeTextForDiagnostics(normalizedContainer, before + after);
+  }
+
+  const start = Math.max(0, index - before);
+  const end = Math.min(normalizedContainer.length, index + normalizedTarget.length + after);
+  const prefix = start > 0 ? '…' : '';
+  const suffix = end < normalizedContainer.length ? '…' : '';
+  const beforeText = normalizedContainer.slice(start, index);
+  const targetText = normalizedContainer.slice(index, index + normalizedTarget.length);
+  const afterText = normalizedContainer.slice(index + normalizedTarget.length, end);
+  return `${prefix}${beforeText}[<<${targetText}>>]${afterText}${suffix}`;
+}
+
+function expandRandomMacroVariants(rawText, maxVariants = 64) {
+  if (typeof rawText !== 'string' || rawText.indexOf('{{random') === -1) {
+    return [];
+  }
+
+  const MAX_DEPTH = 16;
+  const VARIANT_LIMIT = Math.max(1, maxVariants);
+  const placeholderToken = '\u{FFFC}';
+  const unique = new Set();
+
+  const splitRandomOptions = (body) => {
+    if (typeof body !== 'string') return [''];
+    const usesDoubleColon = body.includes('::');
+    let parts;
+    if (usesDoubleColon) {
+      parts = body.split('::');
+    } else {
+      const placeholderEscaped = body.replace(/\\,/g, placeholderToken);
+      parts = placeholderEscaped.split(',').map((part) => part.replace(new RegExp(placeholderToken, 'g'), ','));
+    }
+    return parts.map(part => part.trim()).filter(Boolean);
+  };
+
+  const expand = (text, depth = 0) => {
+    if (unique.size >= VARIANT_LIMIT) {
+      return;
+    }
+    if (depth > MAX_DEPTH) {
+      unique.add(text);
+      return;
+    }
+
+    const pattern = /{{random\s*::?([^}]+)}}/i;
+    const match = pattern.exec(text);
+    if (!match) {
+      unique.add(text);
+      return;
+    }
+
+    const [fullMatch, body] = match;
+    const options = splitRandomOptions(body);
+    const prefix = text.slice(0, match.index);
+    const suffix = text.slice(match.index + fullMatch.length);
+
+    const effectiveOptions = options.length ? options : [''];
+    for (const option of effectiveOptions) {
+      if (unique.size >= VARIANT_LIMIT) {
+        break;
+      }
+      expand(prefix + option + suffix, depth + 1);
+    }
+  };
+
+  expand(rawText);
+  return Array.from(unique.values());
+}
+
+function getEntryTextCandidates(entry) {
+  const result = [];
+  const seen = new Set();
+
+  const pushCandidate = (text, source) => {
+    if (typeof text !== 'string') return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (seen.has(trimmed)) return;
+    seen.add(trimmed);
+    result.push({ text, source });
+  };
+
+  pushCandidate(entry?.promptContent, 'prompt');
+  pushCandidate(entry?.content, 'content');
+  pushCandidate(entry?.rawContent, 'raw');
+  if (entry?.source && typeof entry.source.content === 'string') {
+    pushCandidate(entry.source.content, 'source');
+  }
+
+  const randomSource =
+    typeof entry?.rawContent === 'string' && entry.rawContent.includes('{{random')
+      ? entry.rawContent
+      : typeof entry?.source?.content === 'string' && entry.source.content.includes('{{random')
+        ? entry.source.content
+        : null;
+
+  if (randomSource) {
+    const variants = expandRandomMacroVariants(randomSource, 64);
+    for (const variant of variants) {
+      pushCandidate(variant, 'randomVariant');
+    }
+  }
+
+  return result;
+}
+
+function buildCandidateTextVariants(baseText) {
+  const variants = [];
+  const seen = new Set();
+
+  const push = (value) => {
+    const trimmed = (value || '').trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    variants.push(trimmed);
+  };
+
+  const normalized = (baseText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  push(normalized);
+  push(normalized.replace(/<\/?framework>/gi, ''));
+  push(normalized.replace(/<\/?[^>]+>/g, ''));
+
+  return variants;
+}
+
+function findCandidateMatchInMessage(content, variants) {
+  if (typeof content !== 'string' || !content) return null;
+
+  for (const variant of variants) {
+    if (!variant) continue;
+    const index = content.indexOf(variant);
+    if (index !== -1) {
+      return {
+        offset: index,
+        beginNeedle: variant,
+        endNeedle: variant,
+        matchedSnippet: variant,
+      };
+    }
+  }
+
+  for (const variant of variants) {
+    if (!variant) continue;
+    const lines = variant
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (!lines.length) continue;
+
+    const firstLine = lines[0];
+    const lastLine = lines[lines.length - 1];
+
+    const startIdx = content.indexOf(firstLine);
+    if (startIdx === -1) continue;
+
+    const endIdxStart = content.lastIndexOf(lastLine);
+    if (endIdxStart === -1) continue;
+
+    const endIdx = endIdxStart + lastLine.length;
+    if (endIdx <= startIdx) continue;
+
+    return {
+      offset: startIdx,
+      beginNeedle: firstLine,
+      endNeedle: lastLine,
+      matchedSnippet: variant,
+    };
+  }
+
+  return null;
+}
 
 let runtimeCtx = null;
 let currentNoassState = null;
@@ -227,11 +562,35 @@ async function runWorldbookDryRun(ctx) {
         }
       });
 
+      const entrySummaries = (report.entries || []).map(entry => {
+        const previewSnippet = entry.preview?.snippet
+          ? summarizeText(entry.preview.snippet)
+          : null;
+        return {
+          key: entry.key || null,
+          uid: entry.uid,
+          comment: entry.comment,
+          depth: entry.depth,
+          order: entry.order,
+          target: entry.targetAnchor,
+          role: entry.targetRole,
+          status: entry.status || 'pending',
+          reason: entry.reason || null,
+          preview: entry.preview
+            ? {
+                location: entry.preview.location || entry.targetAnchor,
+                snippet: previewSnippet,
+              }
+            : null,
+        };
+      });
+
       worldbookLogAdapter.append(
         `组 ${report.label || report.id}`,
         {
           target: report.target,
           depths,
+          entries: entrySummaries,
           segmentsPreview: (report.segments || []).slice(0, 3).map(segment => summarizeText(segment)),
           dispatch: dispatchSummary,
         },
@@ -302,7 +661,10 @@ function ensureDryRunGroupReport(group) {
         excludeTitles: Array.from(group.whitelistTitles || []),
       },
       depths: [],
+      entries: [],
+      entryIndexByUid: Object.create(null),
       segments: [],
+      failures: [],
       dispatch: {
         before: [],
         after: [],
@@ -319,15 +681,69 @@ function ensureDryRunGroupReport(group) {
 function registerDryRunDepthSummary(group, depth, entries) {
   const report = ensureDryRunGroupReport(group);
   if (!report) return;
+
+  const targetAnchor = group?.target?.anchor || WORLD_BOOK_ANCHORS.AFTER;
+  const targetRole = group?.target?.role || WORLD_BOOK_DEFAULT_ROLE;
+
+  const summaryEntries = entries.map(item => {
+    const entryKey =
+      item.entryKey ||
+      makeDryRunEntryKey(
+        item.entry,
+        depth,
+        item.entry?.order ?? null,
+        item.messageIndex
+      );
+
+    const preview = {
+      location: item.source || targetAnchor,
+      beginNeedle: item.beginNeedle ? summarizeTextForDiagnostics(item.beginNeedle, 80) : null,
+      endNeedle: item.endNeedle ? summarizeTextForDiagnostics(item.endNeedle, 80) : null,
+      snippet: summarizeTextForDiagnostics(item.matchedText ?? '', 80),
+    };
+
+    if (!Object.prototype.hasOwnProperty.call(report.entryIndexByUid, entryKey)) {
+      report.entryIndexByUid[entryKey] = report.entries.length;
+      report.entries.push({
+        key: entryKey,
+        uid: item.entry?.uid ?? null,
+        comment: item.entry?.comment ?? '',
+        depth,
+        order: item.entry?.order ?? null,
+        targetAnchor,
+        targetRole,
+        status: DRY_RUN_STATUS.PENDING,
+        reason: null,
+        preview,
+      });
+    } else {
+      const existingIndex = report.entryIndexByUid[entryKey];
+      if (typeof existingIndex === 'number' && report.entries[existingIndex]) {
+        report.entries[existingIndex].preview = preview;
+      }
+    }
+
+    return {
+      key: entryKey,
+      uid: item.entry?.uid,
+      comment: item.entry?.comment,
+      depth,
+      messageIndex: item.messageIndex,
+      order: item.entry?.order,
+      matchedSource: item.source || null,
+      matchedPreview: preview.snippet,
+      beginNeedle: item.beginNeedle || null,
+      endNeedle: item.endNeedle || null,
+      targetAnchor,
+      targetRole,
+      preview,
+    };
+  });
+
   const summary = {
     depth,
     count: entries.length,
-    entries: entries.map(item => ({
-      uid: item.entry?.uid,
-      comment: item.entry?.comment,
-      messageIndex: item.messageIndex,
-      order: item.entry?.order,
-    })),
+    entries: summaryEntries,
   };
   report.depths.push(summary);
 }
@@ -495,6 +911,8 @@ function updateWorldbookCache(entries, { source = 'unknown' } = {}) {
           ? String(entry.key[0])
           : '';
 
+    const rawContent = typeof entry.content === 'string' ? entry.content : '';
+    const promptContent = computeWorldbookPromptContent(rawContent, depth);
     const normalizedEntry = {
       uid,
       id: `${entry.world ?? 'world'}:${uid}`,
@@ -504,10 +922,20 @@ function updateWorldbookCache(entries, { source = 'unknown' } = {}) {
       order,
       position,
       role: entry.role,
-      content: entry.content ?? '',
+      content: rawContent,
+      rawContent,
+      promptContent,
       disabled: entry.disable === true,
       source: entry,
     };
+
+    if (rawContent && !promptContent?.trim()) {
+      warnWorldbookIssue('worldbook prompt content empty after expansion', {
+        uid,
+        depth,
+        source,
+      });
+    }
 
     normalized.push(normalizedEntry);
     byId.set(normalizedEntry.uid, normalizedEntry);
@@ -545,17 +973,20 @@ function updateWorldbookCache(entries, { source = 'unknown' } = {}) {
  * - 自动对接酒馆的事件系统；
  * - 首次挂载时尝试使用上下文中的 lastActivatedEntries 填充缓存。
  */
-function initializeWorldbookIntegration(ctx) {
+async function initializeWorldbookIntegration(ctx) {
   if (!ctx?.eventSource) {
     return;
   }
+
+  await ensureRegexHelpers(ctx);
 
   const eventSource = ctx.eventSource;
   const eventTypes = ctx.eventTypes || ctx.event_types || {};
   const activatedEvent = eventTypes.WORLD_INFO_ACTIVATED || 'world_info_activated';
 
   if (!worldbookState.listeners.some(listener => listener.event === activatedEvent)) {
-    const activatedHandler = entries => {
+    const activatedHandler = async entries => {
+      await ensureRegexHelpers(ctx);
       updateWorldbookCache(entries, { source: 'WORLD_INFO_ACTIVATED' });
     };
 
@@ -861,7 +1292,7 @@ export async function mount(ctx) {
     return;
   }
   registerCompletionHandler(ctx, state);
-  initializeWorldbookIntegration(ctx);
+  await initializeWorldbookIntegration(ctx);
 }
 
 /**
@@ -2255,24 +2686,64 @@ function injectWorldbookSentinels(config, blockToMerge) {
       const matchesForDepth = [];
 
       for (const entry of filteredEntries) {
-        let located = false;
-        for (let messageIndex = 0; messageIndex < blockToMerge.length; messageIndex++) {
-          const message = blockToMerge[messageIndex];
-          if (!message?.content || typeof message.content !== 'string') continue;
-          const offset = message.content.indexOf(entry.content);
-          if (offset === -1) continue;
-
-          matchesForDepth.push({
-            entry,
-            messageIndex,
-            offset,
+        const entryCandidates = getEntryTextCandidates(entry);
+        if (!entryCandidates.length) {
+          debugWorldbookLog('worldbook entry has no text candidates', {
+            group: group.id,
+            depth,
+            uid: entry.uid,
           });
-          located = true;
-          break;
+          continue;
         }
 
-        if (!located) {
-          debugWorldbookLog('worldbook entry not found in merge block', { group: group.id, depth, uid: entry.uid });
+        let matchedRecord = null;
+
+        for (const candidate of entryCandidates) {
+          const candidateText = typeof candidate.text === 'string' ? candidate.text : '';
+          if (!candidateText.trim()) continue;
+          const variants = buildCandidateTextVariants(candidateText);
+          const variantList = variants.length ? variants : [candidateText.trim()];
+          for (let messageIndex = 0; messageIndex < blockToMerge.length; messageIndex++) {
+            const message = blockToMerge[messageIndex];
+            if (!message?.content || typeof message.content !== 'string') continue;
+            const matchResult = findCandidateMatchInMessage(message.content, variantList);
+            if (!matchResult) continue;
+
+            const entryKey = makeDryRunEntryKey(
+              entry,
+              depth,
+              entry?.order ?? null,
+              messageIndex
+            );
+
+            matchedRecord = {
+              entry,
+              entryKey,
+              depth,
+              messageIndex,
+              offset: matchResult.offset,
+              matchedText: matchResult.matchedSnippet ?? candidateText,
+              beginNeedle: matchResult.beginNeedle ?? matchResult.matchedSnippet ?? candidateText,
+              endNeedle: matchResult.endNeedle ?? matchResult.matchedSnippet ?? candidateText,
+              source: candidate.source,
+            };
+            break;
+          }
+          if (matchedRecord) break;
+        }
+
+        if (matchedRecord) {
+          matchesForDepth.push(matchedRecord);
+        } else {
+          warnWorldbookIssue('worldbook entry not found for sentinel injection', {
+            group: group.id,
+            depth,
+            uid: entry.uid,
+            candidates: entryCandidates.map(candidate => ({
+              source: candidate.source,
+              preview: summarizeTextForDiagnostics(candidate.text, 60),
+            })),
+          });
         }
       }
 
@@ -2289,7 +2760,7 @@ function injectWorldbookSentinels(config, blockToMerge) {
       }
 
       matchesForDepth.sort((a, b) => {
-       // 按消息索引与偏移排序，确保插入目标标记时遵循原生顺序。
+        // 按消息索引与偏移排序，确保插入目标标记时遵循原生顺序。
         if (a.messageIndex !== b.messageIndex) return a.messageIndex - b.messageIndex;
         return a.offset - b.offset;
       });
@@ -2300,24 +2771,73 @@ function injectWorldbookSentinels(config, blockToMerge) {
       const firstMessage = blockToMerge[firstMatch.messageIndex];
       const lastMessage = blockToMerge[lastMatch.messageIndex];
 
-      firstMessage.content = insertBeforeFirstOccurrence(
-        firstMessage.content,
-        firstMatch.entry.content,
+      const originalFirstContent = firstMessage.content;
+      const originalLastContent = lastMessage.content;
+      const beginNeedle = firstMatch.beginNeedle ?? firstMatch.matchedText ?? firstMatch.entry.content ?? '';
+      const endNeedle = lastMatch.endNeedle ?? lastMatch.matchedText ?? lastMatch.entry.content ?? '';
+
+      const updatedFirst = insertBeforeFirstOccurrence(
+        originalFirstContent,
+        beginNeedle,
         beginMarker,
       );
-      lastMessage.content = insertAfterLastOccurrence(
-        lastMessage.content,
-        lastMatch.entry.content,
+
+      if (updatedFirst === originalFirstContent) {
+        warnWorldbookIssue('failed to insert worldbook begin sentinel', {
+          group: group.id,
+          depth,
+          uid: firstMatch.entry.uid,
+          messageIndex: firstMatch.messageIndex,
+          preview: summarizeTextForDiagnostics(beginNeedle, 60),
+        });
+        continue;
+      }
+
+      firstMessage.content = updatedFirst;
+
+      const lastBaseContent = lastMessage === firstMessage ? firstMessage.content : lastMessage.content;
+      const updatedLast = insertAfterLastOccurrence(
+        lastBaseContent,
+        endNeedle,
         endMarker,
       );
+
+      if (updatedLast === lastBaseContent) {
+        warnWorldbookIssue('failed to insert worldbook end sentinel', {
+          group: group.id,
+          depth,
+          uid: lastMatch.entry.uid,
+          messageIndex: lastMatch.messageIndex,
+          preview: summarizeTextForDiagnostics(endNeedle, 60),
+        });
+        firstMessage.content = originalFirstContent;
+        if (lastMessage !== firstMessage) {
+          lastMessage.content = originalLastContent;
+        }
+        continue;
+      }
+
+      if (lastMessage === firstMessage) {
+        firstMessage.content = updatedLast;
+      } else {
+        lastMessage.content = updatedLast;
+      }
 
       group.matches.set(depth, {
         beginMarker,
         endMarker,
         entries: matchesForDepth.map(match => ({
+          entryKey: match.entryKey,
           uid: match.entry.uid,
           comment: match.entry.comment,
+          depth,
           messageIndex: match.messageIndex,
+          order: match.entry.order,
+          offset: match.offset ?? null,
+          matchedSource: match.source,
+          beginNeedle: match.beginNeedle || null,
+          endNeedle: match.endNeedle || null,
+          matchedPreview: summarizeTextForDiagnostics(match.matchedText ?? '', 60),
         })),
       });
 
@@ -2362,28 +2882,60 @@ function normalizeWorldbookContent(text) {
  * - custom：尝试替换自定义锚点，失败则回退至 after。
  */
 function applyWorldbookSegmentDispatch(group, segments, contentHolder, beforeMessages, afterMessages) {
-  const payload = normalizeWorldbookFragment(segments.join('\n\n'));
-  if (!payload) return;
- 
   const role = group?.target?.role?.trim() || WORLD_BOOK_DEFAULT_ROLE;
   const anchor = group?.target?.anchor || WORLD_BOOK_ANCHORS.AFTER;
+  const resultInfo = {
+    status: DRY_RUN_STATUS.SUCCESS,
+    anchor,
+    role,
+    reason: null,
+    preview: null,
+  };
+
+  const payload = normalizeWorldbookFragment(segments.join('\n\n'));
+  if (!payload) {
+    resultInfo.status = DRY_RUN_STATUS.FAILED;
+    resultInfo.reason = 'empty payload after normalization';
+    return resultInfo;
+  }
+
+  // 构建搬运后段落的简要摘要，写入 Dry Run 报告时便于快速辨别目标位置与内容
+  const summarizePreview = (snippet, location = anchor) => ({
+    location,
+    snippet: summarizeTextForDiagnostics(snippet ?? '', 160),
+  });
+
+  // 针对 header/memory/custom 等直接写回合并文本的场景，额外截取上下文作为调试用预览
+  const buildContextPreview = (location = anchor) => {
+    const context = captureContextPreview(contentHolder.value, payload, { before: 80, after: 80 });
+    return {
+      location,
+      snippet: context || summarizeTextForDiagnostics(payload, 160),
+    };
+  };
+
   const message = { role, content: payload };
- 
+  let preview = null;
+
   switch (anchor) {
     case WORLD_BOOK_ANCHORS.BEFORE:
       beforeMessages.push(message);
+      preview = summarizePreview(message.content, WORLD_BOOK_ANCHORS.BEFORE);
       pushDryRunDispatch(group, 'before', message);
       break;
     case WORLD_BOOK_ANCHORS.AFTER:
       afterMessages.push(message);
+      preview = summarizePreview(message.content, WORLD_BOOK_ANCHORS.AFTER);
       pushDryRunDispatch(group, 'after', message);
       break;
     case WORLD_BOOK_ANCHORS.HEADER:
       contentHolder.value = normalizeWorldbookContent(`${payload}\n\n${contentHolder.value}`);
+      preview = buildContextPreview(WORLD_BOOK_ANCHORS.HEADER);
       pushDryRunDispatch(group, 'header', payload);
       break;
     case WORLD_BOOK_ANCHORS.MEMORY:
       contentHolder.value = normalizeWorldbookContent(`${contentHolder.value}\n\n${payload}`);
+      preview = buildContextPreview(WORLD_BOOK_ANCHORS.MEMORY);
       pushDryRunDispatch(group, 'memory', payload);
       break;
     case WORLD_BOOK_ANCHORS.CUSTOM: {
@@ -2394,29 +2946,46 @@ function applyWorldbookSegmentDispatch(group, segments, contentHolder, beforeMes
           const beforeAnchor = contentHolder.value.slice(0, anchorIndex);
           const afterAnchor = contentHolder.value.slice(anchorIndex + key.length);
           contentHolder.value = `${beforeAnchor}${payload}${afterAnchor}`;
+          preview = buildContextPreview(`${WORLD_BOOK_ANCHORS.CUSTOM}:${key}`);
           debugWorldbookLog('worldbook segment injected at custom anchor', { group: group?.id, key });
           pushDryRunDispatch(group, 'custom', payload);
           break;
         }
+        resultInfo.status = DRY_RUN_STATUS.FALLBACK;
+        resultInfo.reason = `custom anchor "${key}" not found`;
+      } else {
+        resultInfo.status = DRY_RUN_STATUS.FALLBACK;
+        resultInfo.reason = 'custom anchor not specified';
       }
+      resultInfo.anchor = WORLD_BOOK_ANCHORS.AFTER;
       afterMessages.push(message);
+      preview = summarizePreview(message.content, WORLD_BOOK_ANCHORS.AFTER);
       pushDryRunDispatch(group, 'custom', message, { fallback: true });
       debugWorldbookLog('custom anchor fallback to after', { group: group?.id, key });
       break;
     }
     default:
       afterMessages.push(message);
+      preview = summarizePreview(message.content, WORLD_BOOK_ANCHORS.AFTER);
       pushDryRunDispatch(group, 'after', message);
       break;
   }
- 
+
+  resultInfo.preview = preview;
+  // 统一记录搬运结果（锚点/角色/段落数/预览），Dry Run 侧即可完整展示调试数据
+
   debugWorldbookLog('worldbook segment dispatched', {
     // 记录搬移摘要，方便在 debug 模式下确认段落去向。
     group: group?.id,
-    anchor,
-    role,
+    anchor: resultInfo.anchor,
+    role: resultInfo.role,
     segments: segments.length,
+    status: resultInfo.status,
+    reason: resultInfo.reason || undefined,
+    preview: preview?.snippet,
   });
+
+  return resultInfo;
 }
  
 /**
@@ -2445,7 +3014,11 @@ function dispatchWorldbookSegments(config, mergedAssistantMessage) {
     const endMarker = `${prefix}END`;
     const pattern = new RegExp(`${regexEscape(beginMarker)}([\\s\\S]*?)${regexEscape(endMarker)}`, 'g');
     const segments = [];
- 
+    const matchedEntryKeys = collectGroupMatchedEntries(group);
+    // 记录当前搬运组目标锚点/角色，后续在 Dry Run 中作为条目状态更新的默认值
+    const defaultAnchor = group?.target?.anchor || WORLD_BOOK_ANCHORS.AFTER;
+    const defaultRole = group?.target?.role || WORLD_BOOK_DEFAULT_ROLE;
+
     contentHolder.value = contentHolder.value.replace(pattern, (_match, inner) => {
       const normalized = normalizeWorldbookFragment(inner);
       if (normalized) {
@@ -2453,7 +3026,7 @@ function dispatchWorldbookSegments(config, mergedAssistantMessage) {
       }
       return '';
     });
- 
+
     const orphanBegin = contentHolder.value.includes(beginMarker);
     const orphanEnd = contentHolder.value.includes(endMarker);
     if (orphanBegin || orphanEnd) {
@@ -2466,8 +3039,19 @@ function dispatchWorldbookSegments(config, mergedAssistantMessage) {
         .replace(new RegExp(regexEscape(beginMarker), 'g'), '')
         .replace(new RegExp(regexEscape(endMarker), 'g'), '');
     }
- 
+
     if (!segments.length) {
+      if (matchedEntryKeys.length) {
+        // 未抓取到任何片段，说明哨兵被清除或宏未命中，直接将命中的条目标记为 fallback
+        matchedEntryKeys.forEach(entryKey =>
+          updateDryRunEntryStatus(group, entryKey, DRY_RUN_STATUS.FALLBACK, {
+            anchor: defaultAnchor,
+            role: defaultRole,
+            reason: 'no worldbook segments extracted between sentinels',
+            preview: null,
+          })
+        );
+      }
       if (
         group.target?.anchor === WORLD_BOOK_ANCHORS.CUSTOM &&
         group.clean_orphan_anchor === true
@@ -2489,7 +3073,7 @@ function dispatchWorldbookSegments(config, mergedAssistantMessage) {
       warnWorldbookIssue('duplicate worldbook dispatch detected, skipping group', { group: group.id });
       continue;
     }
- 
+
     if (group.matches instanceof Map) {
       // 记录每个 depth 命中的数量，便于后续排查遗漏或多次搬移。
       debugWorldbookLog('worldbook segments extracted', {
@@ -2506,16 +3090,49 @@ function dispatchWorldbookSegments(config, mergedAssistantMessage) {
     }
 
     appendDryRunSegments(group, segments);
- 
+
     group.sentinel = group.sentinel || {};
+    // 本轮搬运逻辑完成后复位 opened 状态，避免残留标志影响下一次请求
     group.sentinel.opened = false;
 
+    let resultInfo = null;
     try {
+      // 调用搬运函数并接收返回状态，成功时 resultInfo 会携带 标记/注入角色/预览 等信息
       // 搬运过程中可能因目标锚点缺失抛错，此处捕获并记录，以免影响后续消息流水。
-      applyWorldbookSegmentDispatch(group, segments, contentHolder, result.before, result.after);
+      resultInfo = applyWorldbookSegmentDispatch(group, segments, contentHolder, result.before, result.after);
       group.sentinel.moved = true;
     } catch (error) {
       warnWorldbookIssue('failed to dispatch worldbook segments', { group: group.id, error });
+      resultInfo = {
+        status: DRY_RUN_STATUS.FAILED,
+        anchor: defaultAnchor,
+        role: defaultRole,
+        reason: error?.message || 'worldbook dispatch failed',
+        preview: null,
+      };
+    }
+
+    if (!resultInfo) {
+      // 安全兜底：即便搬运异常不中断，也要回写默认的成功状态以防 Dry Run 崩溃
+      resultInfo = {
+        status: DRY_RUN_STATUS.SUCCESS,
+        anchor: defaultAnchor,
+        role: defaultRole,
+        reason: null,
+        preview: null,
+      };
+    }
+
+    if (matchedEntryKeys.length) {
+      const extra = {
+        // 展示搬运结果的锚点/角色/原因/预览，条目层级的 Dry Run 报告呈现上下文
+        anchor: resultInfo.anchor ?? defaultAnchor,
+        role: resultInfo.role ?? defaultRole,
+        reason: resultInfo.reason ?? null,
+        preview: resultInfo.preview ?? null,
+      };
+      const statusValue = resultInfo.status || DRY_RUN_STATUS.SUCCESS;
+      matchedEntryKeys.forEach(entryKey => updateDryRunEntryStatus(group, entryKey, statusValue, extra));
     }
   }
  
