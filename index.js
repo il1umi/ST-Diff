@@ -96,7 +96,7 @@ const Modules = {
       if (this.mounted) return;
       this.mounted = true;
       try {
-        const mod = await import('./modules/noass/noass.module.js');
+        const mod = await import('./modules/noass/index.js');
         await mod.mount(ctx);
       } catch (e) {
         console.warn('[ST-Diff] noass 模块加载失败', e);
@@ -107,7 +107,7 @@ const Modules = {
       if (!this.mounted) return;
       this.mounted = false;
       try {
-        const mod = await import('./modules/noass/noass.module.js');
+        const mod = await import('./modules/noass/index.js');
         if (typeof mod.unmount === 'function') {
           await mod.unmount(ctx);
         }

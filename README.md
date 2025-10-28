@@ -2,7 +2,7 @@
 
 一个为 SillyTavern 设计的差异对比扩展，提供世界书条目的可视化对比、条目内容迁移功能。未来会加入预设功能。
 
-![版本](https://img.shields.io/badge/版本-1.3.0-blue.svg)
+![版本](https://img.shields.io/badge/版本-1.3.5-blue.svg)
 ![许可证](https://img.shields.io/badge/许可证-AGPL--3.0-blue.svg)
 
 ## 致谢
@@ -17,40 +17,109 @@ ST-Diff 是一个专为 SillyTavern 世界书管理设计的扩展，能够：
 - **实时编辑预览** - 在对比界面中直接编辑内容，实时查看修改效果
 - **暂存模式** - 支持手动保存模式，批量提交修改，避免频繁写盘
 - **版本管理** - 支持世界书条目的版本对比和历史追踪
-- **对话压缩和世界书提取与传递** - 支持压缩消息为单条并将世界书深度条目从chathistory剥离并任意放置
+- **世界书提取并传递管线** - 根据世界书深度与顺序自动包裹启用条目，将其迁移到配置目标段落并清理目标标记
+- **多组策略** - 通过可分页的策略组配置，实现不同深度集合、白名单与目标位置的并行生效
 - **高度可定制** - 支持自定义颜色主题、上下文行数、词级高亮等个性化设置
 
 ## 项目结构
 
 ```
 ST-Diff/
-├── modules/                           # 核心功能模块
-│   ├── noass/                         # 对话合并 & clewd 正则 & 世界书提取/剥离
-│   │   └── noass.module.js            # noass 模块主逻辑
-│   ├── worldbook/                     # 世界书对比模块
-│   │   ├── actions/                   # 操作处理器
-│   │   │   ├── hunks.js              # Hunk 操作逻辑
-│   │   │   └── sessionPatch.js       # 会话补丁管理
-│   │   ├── templates/                 # HTML 模板
-│   │   │   ├── code_diff.html        # 代码对比界面模板
-│   │   │   └── entry_diff.html       # 条目对比界面模板
-│   │   ├── codeDiff.js               # 代码级差异对比引擎
-│   │   ├── diff.js                   # 差异计算核心
-│   │   ├── entryDiff.js              # 条目级差异处理
-│   │   ├── paramsDiff.js             # 条目参数对比与编辑
-│   │   ├── repo.js                   # 世界书仓库接口
-│   │   ├── worldbook.module.js       # 世界书模块主控制器
-│   │   └── panel.html                # 主面板模板
-│   └── presets/                       # 预设对比模块（占位）
-├── presentation/                      # UI 表现层
-│   ├── styles/                       # 样式文件
-│   │   └── main.css                  # 主样式表
-│   └── templates/                    # 全局模板
-│       └── main.html                 # 主界面模板
-├── index.js                          # 主入口文件
-├── manifest.json                     # 扩展清单文件
+├── index.js                          # 扩展主入口，负责模块化装载
+├── manifest.json                     # SillyTavern 扩展清单
+├── modules/                          # 核心功能模块
+│   ├── noass/                        # 对话压缩、clewd正则、世界书提取与传递
+│   │   ├── index.js                  # noass 入口协调器
+│   │   ├── runtime/                  # 运行时代码域
+│   │   │   ├── completion.js         # 与 SillyTavern completion 流程对接
+│   │   │   ├── mergeBlock.js         # 压缩消息与角色映射
+│   │   │   ├── capture/              # Dry-Run 捕获与日志
+│   │   │   │   └── capture.js
+│   │   │   ├── clewd/                # clewd 正则处理
+│   │   │   │   ├── constants.js
+│   │   │   │   └── processor.js
+│   │   │   └── wibridge/             # 世界书桥接处理
+│   │   │       ├── cache.js
+│   │   │       ├── dispatch.js
+│   │   │       ├── index.js
+│   │   │       ├── normalize.js
+│   │   │       ├── sentinel.js
+│   │   │       └── state.js
+│   │   ├── state/                    # 设置与运行时状态
+│   │   │   ├── defaults.js
+│   │   │   └── state.js
+│   │   └── ui/                       # 界面交互绑定
+│   │       ├── binder.js
+│   │       └── wibridgeControls.js
+│   ├── worldbook/                    # 世界书对比模块
+│   │   ├── actions/
+│   │   │   ├── hunks.js
+│   │   │   └── sessionPatch.js
+│   │   ├── templates/
+│   │   │   ├── code_diff.html
+│   │   │   └── entry_diff.html
+│   │   ├── codeDiff.js
+│   │   ├── diff.js
+│   │   ├── entryDiff.js
+│   │   ├── paramsDiff.js
+│   │   ├── repo.js
+│   │   ├── worldbook.module.js
+│   │   └── panel.html
+│   └── presets/                      # 预设对比模块（占位）
+├── presentation/                     # UI 表现层
+│   ├── styles/
+│   │   └── main.css
+│   └── templates/
+│       └── main.html
 └── README.md                         # 项目文档
 ```
+
+## noass 模块快速总览
+
+新的 noass 架构将复杂的对话压缩与世界书处理拆分为多个协作模块：
+
+- **入口协调器**：[`modules/noass/index.js`](ST-Diff/modules/noass/index.js) 负责注入上下文、注册运行时钩子，并与 SillyTavern 的 `getContext()` 保持低耦合。
+- **运行时域**：
+  - [`runtime/mergeBlock.js`](ST-Diff/modules/noass/runtime/mergeBlock.js) 负责按照自定义角色前缀压缩消息并输出单条对话。
+  - [`runtime/completion.js`](ST-Diff/modules/noass/runtime/completion.js) 与 SillyTavern 的 OpenAI 流程对接，确保压缩后消息按 API 期望格式提交。
+  - [`runtime/capture/capture.js`](ST-Diff/modules/noass/runtime/capture/capture.js) 实现 Dry-Run 捕获、日志记录与策略结果预览。
+  - [`runtime/clewd/processor.js`](ST-Diff/modules/noass/runtime/clewd/processor.js) 延续 clewd 正则阶段，复用 order-1/2/3 的替换逻辑。
+  - [`runtime/wibridge`](ST-Diff/modules/noass/runtime/wibridge/index.js) 子域处理世界书深度分段、哨兵标记与目标插入。
+- **状态与设置**：[`state/state.js`](ST-Diff/modules/noass/state/state.js) 与 [`state/defaults.js`](ST-Diff/modules/noass/state/defaults.js) 统一管理策略组、白名单及 UI 同步。
+- **UI 绑定**：[`ui/binder.js`](ST-Diff/modules/noass/ui/binder.js) 通过依赖注入方式组装界面事件，支持扩展组分页、白名单编辑器与 Dry-Run 触发。
+
+保留的 [`noass.module.js`](ST-Diff/modules/noass/noass.module.js) 仅负责与旧版入口兼容及托管生命周期，所有实际逻辑均迁移至上述模块。
+
+## 世界书提取与传递配置指南
+
+新版本的世界书管线在保持 clewd 正则处理顺序的前提下，实现以下能力：
+
+1. **深度选择模式**
+   - ≥ 模式：选择一个最小深度 `N`，提取所有深度不小于 `N` 的启用条目。
+   - 范围模式：指定 `[min..max]`，仅提取区间内的启用条目。
+   - 两种模式可在策略组间独立配置，互不干扰。
+
+2. **顺序稳定性与哨兵标记**
+   - 针对同一深度，模块会定位启用条目的最小/最大顺序，在两端插入唯一哨兵标记。
+   - 被包裹的段落整体移动至目标位置后，会移除哨兵与辅助文本，确保不污染消息上下文。
+
+3. **白名单优先级**
+   - 可对整深度或某个标题（comment）进行排除。
+   - 白名单判定优先于提取逻辑，满足“只移除未排除的启用条目”的要求。
+
+4. **多组策略并行**
+   - 每组策略包含：启用开关、深度模式、目标锚点、白名单集合、Dry-Run 输出。
+   - UI 通过分页按钮切换不同组，便于维护大规模策略集合。
+   - 策略组顺序即执行顺序，可通过拖动重排（开发中）或配置文件调整索引。
+
+5. **目标锚点**
+   - 预置锚点：压缩消息头部、系统提示区、自定义标签等。
+   - 支持自由输入锚点名称，通过 noass 内部映射定位插入点。
+   - 若锚点未命中，会自动跳过并记录在 Dry-Run 日志中，避免破坏消息链。
+
+6. **Dry-Run 与日志**
+   - 在策略保存前可通过 Dry-Run 查看世界书段落的实际包裹、移动与清理过程。
+   - 日志同时输出 clewd order 级别的正则命中情况，便于定位冲突。
 
 ## 使用方法
 
@@ -241,5 +310,6 @@ Copyright (C) 2025 shin/il1umi
 
 - **Issues**：[GitHub Issues](https://github.com/il1umi/ST-Diff/issues)
 - **讨论**：[GitHub Discussions](https://github.com/il1umi/ST-Diff/discussions)
+
 
 
