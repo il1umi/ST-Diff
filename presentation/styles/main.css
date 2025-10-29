@@ -4,8 +4,19 @@
 #st-diff .st-diff-left, #st-diff .st-diff-center, #st-diff .st-diff-right { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 8px; }
 #st-diff .st-diff-view { min-height: 240px; }
 
-/* 通用按钮防竖排 */
+/* 通用按钮防酒馆自带样式导致按钮竖排 */
 #st-diff .menu_button { width: auto; white-space: nowrap; }
+
+/* 强制世界书对比按钮横向排列 */
+#stdiff-worldbook-panel .menu_button {
+  width: auto;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+}
 
 /* 世界书面板 */
 #stdiff-noass-worldbook { gap: 16px; }
@@ -58,7 +69,9 @@
 
 /* noass 配置区域样式 */
 #st-diff .stdiff-section { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 8px; padding: 12px; margin: 10px 0 16px; background: rgba(0,0,0,0.15); }
-#st-diff .stdiff-section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+#st-diff .stdiff-section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+#st-diff .stdiff-section.is-collapsed .stdiff-section-body { display: none; }
+#st-diff .stdiff-section.is-collapsed .stdiff-noass-collapse i { transform: rotate(180deg); }
 #st-diff .stdiff-section-body { display: flex; flex-direction: column; gap: 14px; }
 
 #st-diff .stdiff-noass-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
@@ -72,8 +85,15 @@
 
 #st-diff .stdiff-noass-checks { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 
-#st-diff .stdiff-noass-block { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.12); }
-#st-diff .stdiff-noass-block-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#st-diff .stdiff-noass-block { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 12px; background: rgba(0,0,0,0.12); }
+#st-diff .stdiff-noass-block-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+#st-diff .stdiff-noass-header-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+#st-diff .stdiff-noass-block-title { font-weight: 600; font-size: 15px; }
+#st-diff .stdiff-noass-collapse { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 10px; }
+#st-diff .stdiff-noass-collapse i { transition: transform 0.2s ease; }
+#st-diff .stdiff-noass-block-body { display: flex; flex-direction: column; gap: 10px; }
+#st-diff .stdiff-noass-block.is-collapsed .stdiff-noass-block-body { display: none; }
+#st-diff .stdiff-noass-block.is-collapsed .stdiff-noass-collapse i { transform: rotate(180deg); }
 #st-diff .stdiff-noass-rules,
 #st-diff .stdiff-noass-storage { display: flex; flex-direction: column; gap: 10px; }
 

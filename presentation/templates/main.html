@@ -10,99 +10,131 @@
         <label class="checkbox_label"><input type="checkbox" id="stdiff-enabled"> 启用世界书对比</label>
       </div>
 
-      <div id="stdiff-noass" class="stdiff-section">
+      <div id="stdiff-noass" class="stdiff-section" data-stdiff-section="root">
         <div class="stdiff-section-header">
-          <label class="checkbox_label">
-            <input type="checkbox" id="stdiff-noass-enabled">
-            启用 noass（对话合并与 clewd 正则）
-          </label>
+          <div class="stdiff-noass-header-main">
+            <label class="checkbox_label">
+              <input type="checkbox" id="stdiff-noass-enabled">
+              启用 noass（对话合并与 clewd 正则）
+            </label>
+          </div>
+          <button type="button" class="menu_button stdiff-noass-collapse" data-stdiff-collapse="root" aria-expanded="true" title="折叠/展开">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
         </div>
         <div id="stdiff-noass-body" class="stdiff-section-body">
-          <div class="stdiff-noass-line">
-            <span class="stdiff-noass-label">配置模板</span>
-            <select id="stdiff-noass-tpl-select" class="text_pole"></select>
-            <div class="stdiff-noass-btns">
-              <button class="menu_button" id="stdiff-noass-tpl-new">新建</button>
-              <button class="menu_button" id="stdiff-noass-tpl-dup">复制</button>
-              <button class="menu_button" id="stdiff-noass-tpl-rename">重命名</button>
-              <button class="menu_button" id="stdiff-noass-tpl-del">删除</button>
-              <button class="menu_button" id="stdiff-noass-tpl-save">保存当前</button>
-              <button class="menu_button" id="stdiff-noass-tpl-export">导出</button>
-              <button class="menu_button" id="stdiff-noass-tpl-import">导入</button>
-              <input type="file" id="stdiff-noass-tpl-import-file" accept=".json" style="display:none">
-            </div>
-          </div>
-
-          <div class="stdiff-noass-grid">
-            <label for="stdiff-noass-user">user</label>
-            <input class="text_pole" id="stdiff-noass-user" spellcheck="false">
-            <label for="stdiff-noass-assistant">assistant</label>
-            <input class="text_pole" id="stdiff-noass-assistant" spellcheck="false">
-            <label for="stdiff-noass-example-user">example_user</label>
-            <input class="text_pole" id="stdiff-noass-example-user" spellcheck="false">
-            <label for="stdiff-noass-example-assistant">example_assistant</label>
-            <input class="text_pole" id="stdiff-noass-example-assistant" spellcheck="false">
-            <label for="stdiff-noass-system">system</label>
-            <input class="text_pole" id="stdiff-noass-system" spellcheck="false">
-            <label for="stdiff-noass-separator">separator</label>
-            <input class="text_pole" id="stdiff-noass-separator" spellcheck="false">
-            <label for="stdiff-noass-sep-system">separator_system <small>例如：<SYS/></small></label>
-            <input class="text_pole" id="stdiff-noass-sep-system" spellcheck="false">
-            <label for="stdiff-noass-prefill">prefill_user</label>
-            <input class="text_pole" id="stdiff-noass-prefill" spellcheck="false">
-          </div>
-
-          <div class="stdiff-noass-checks">
-            <label><input type="checkbox" id="stdiff-noass-single-user"> 启用单 user</label>
-            <label><input type="checkbox" id="stdiff-noass-clean-clewd"> 清理空 clewd 正则</label>
-            <label><input type="checkbox" id="stdiff-noass-inject-prefill"> 注入 user 预填充消息</label>
-            <label><input type="checkbox" id="stdiff-noass-cap-enabled"> 启用数据捕获</label>
-          </div>
-
-          <div class="stdiff-noass-block">
+          <div class="stdiff-noass-block" data-stdiff-section="template">
             <div class="stdiff-noass-block-header">
-              <span>数据捕获规则</span>
-              <div class="stdiff-noass-btns">
-                <button class="menu_button" id="stdiff-noass-add-rule">添加规则</button>
-                <button class="menu_button" id="stdiff-noass-save-rules">保存规则</button>
+              <div class="stdiff-noass-header-main">
+                <span class="stdiff-noass-block-title">配置模板</span>
               </div>
+              <button type="button" class="menu_button stdiff-noass-collapse" data-stdiff-collapse="template" aria-expanded="true" title="折叠/展开">
+                <i class="fa-solid fa-chevron-up"></i>
+              </button>
             </div>
-            <div id="stdiff-noass-rules" class="stdiff-noass-rules"></div>
-          </div>
-
-          <div id="stdiff-noass-worldbook" class="stdiff-noass-block stdiff-worldbook-section">
-            <div class="stdiff-worldbook-header">
-              <span class="stdiff-worldbook-title">世界书搬移策略</span>
-              <div class="stdiff-worldbook-header-controls">
-                <label class="checkbox_label stdiff-worldbook-debug">
-                  <input type="checkbox" id="stdiff-noass-worldbook-debug">
-                  输出调试日志
-                </label>
-                <div class="stdiff-noass-btns stdiff-worldbook-nav-buttons">
-                  <button class="menu_button" id="stdiff-noass-worldbook-prev">上一组</button>
-                  <span class="stdiff-worldbook-index" id="stdiff-noass-worldbook-index">0 / 0</span>
-                  <button class="menu_button" id="stdiff-noass-worldbook-next">下一组</button>
-                  <button class="menu_button" id="stdiff-noass-worldbook-add">新建</button>
-                  <button class="menu_button" id="stdiff-noass-worldbook-dup">复制</button>
-                  <button class="menu_button" id="stdiff-noass-worldbook-del">删除</button>
+            <div class="stdiff-noass-block-body">
+              <div class="stdiff-noass-line">
+                <span class="stdiff-noass-label">配置模板</span>
+                <select id="stdiff-noass-tpl-select" class="text_pole"></select>
+                <div class="stdiff-noass-btns">
+                  <button class="menu_button" id="stdiff-noass-tpl-new">新建</button>
+                  <button class="menu_button" id="stdiff-noass-tpl-dup">复制</button>
+                  <button class="menu_button" id="stdiff-noass-tpl-rename">重命名</button>
+                  <button class="menu_button" id="stdiff-noass-tpl-del">删除</button>
+                  <button class="menu_button" id="stdiff-noass-tpl-save">保存当前</button>
+                  <button class="menu_button" id="stdiff-noass-tpl-export">导出</button>
+                  <button class="menu_button" id="stdiff-noass-tpl-import">导入</button>
+                  <input type="file" id="stdiff-noass-tpl-import-file" accept=".json" style="display:none">
                 </div>
               </div>
-            </div>
 
-            <div class="stdiff-worldbook-overview">
-              <label class="checkbox_label">
-                <input type="checkbox" id="stdiff-noass-worldbook-enabled">
-                启用当前策略
-              </label>
-              <input class="text_pole" id="stdiff-noass-worldbook-label" spellcheck="false" placeholder="策略名称">
-              <div class="stdiff-worldbook-meta">
-                <label for="stdiff-noass-worldbook-order">全局排序</label>
-                <input type="number" class="text_pole" id="stdiff-noass-worldbook-order" min="0" step="1">
+              <div class="stdiff-noass-grid">
+                <label for="stdiff-noass-user">user</label>
+                <input class="text_pole" id="stdiff-noass-user" spellcheck="false">
+                <label for="stdiff-noass-assistant">assistant</label>
+                <input class="text_pole" id="stdiff-noass-assistant" spellcheck="false">
+                <label for="stdiff-noass-example-user">example_user</label>
+                <input class="text_pole" id="stdiff-noass-example-user" spellcheck="false">
+                <label for="stdiff-noass-example-assistant">example_assistant</label>
+                <input class="text_pole" id="stdiff-noass-example-assistant" spellcheck="false">
+                <label for="stdiff-noass-system">system</label>
+                <input class="text_pole" id="stdiff-noass-system" spellcheck="false">
+                <label for="stdiff-noass-separator">separator</label>
+                <input class="text_pole" id="stdiff-noass-separator" spellcheck="false">
+                <label for="stdiff-noass-sep-system">separator_system <small>例如：<SYS/></small></label>
+                <input class="text_pole" id="stdiff-noass-sep-system" spellcheck="false">
+                <label for="stdiff-noass-prefill">prefill_user</label>
+                <input class="text_pole" id="stdiff-noass-prefill" spellcheck="false">
+              </div>
+
+              <div class="stdiff-noass-checks">
+                <label><input type="checkbox" id="stdiff-noass-single-user"> 启用单 user</label>
+                <label><input type="checkbox" id="stdiff-noass-clean-clewd"> 清理空 clewd 正则</label>
+                <label><input type="checkbox" id="stdiff-noass-inject-prefill"> 注入 user 预填充消息</label>
+                <label><input type="checkbox" id="stdiff-noass-cap-enabled"> 启用数据捕获</label>
               </div>
             </div>
-            <div class="stdiff-worldbook-summary" id="stdiff-noass-worldbook-summary"></div>
+          </div>
 
-            <div class="stdiff-worldbook-grid">
+          <div class="stdiff-noass-block" data-stdiff-section="capture">
+            <div class="stdiff-noass-block-header">
+              <div class="stdiff-noass-header-main">
+                <span class="stdiff-noass-block-title">数据捕获规则</span>
+                <div class="stdiff-noass-btns">
+                  <button class="menu_button" id="stdiff-noass-add-rule">添加规则</button>
+                  <button class="menu_button" id="stdiff-noass-save-rules">保存规则</button>
+                </div>
+              </div>
+              <button type="button" class="menu_button stdiff-noass-collapse" data-stdiff-collapse="capture" aria-expanded="true" title="折叠/展开">
+                <i class="fa-solid fa-chevron-up"></i>
+              </button>
+            </div>
+            <div class="stdiff-noass-block-body">
+              <div id="stdiff-noass-rules" class="stdiff-noass-rules"></div>
+            </div>
+          </div>
+
+          <div id="stdiff-noass-worldbook" class="stdiff-noass-block stdiff-worldbook-section" data-stdiff-section="worldbook">
+            <div class="stdiff-noass-block-header">
+              <div class="stdiff-noass-header-main">
+                <div class="stdiff-worldbook-header">
+                  <span class="stdiff-worldbook-title">世界书搬移策略</span>
+                  <div class="stdiff-worldbook-header-controls">
+                    <label class="checkbox_label stdiff-worldbook-debug">
+                      <input type="checkbox" id="stdiff-noass-worldbook-debug">
+                      输出调试日志
+                    </label>
+                    <div class="stdiff-noass-btns stdiff-worldbook-nav-buttons">
+                      <button class="menu_button" id="stdiff-noass-worldbook-prev">上一组</button>
+                      <span class="stdiff-worldbook-index" id="stdiff-noass-worldbook-index">0 / 0</span>
+                      <button class="menu_button" id="stdiff-noass-worldbook-next">下一组</button>
+                      <button class="menu_button" id="stdiff-noass-worldbook-add">新建</button>
+                      <button class="menu_button" id="stdiff-noass-worldbook-dup">复制</button>
+                      <button class="menu_button" id="stdiff-noass-worldbook-del">删除</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="menu_button stdiff-noass-collapse" data-stdiff-collapse="worldbook" aria-expanded="true" title="折叠/展开">
+                <i class="fa-solid fa-chevron-up"></i>
+              </button>
+            </div>
+
+            <div class="stdiff-noass-block-body">
+              <div class="stdiff-worldbook-overview">
+                <label class="checkbox_label">
+                  <input type="checkbox" id="stdiff-noass-worldbook-enabled">
+                  启用当前策略
+                </label>
+                <input class="text_pole" id="stdiff-noass-worldbook-label" spellcheck="false" placeholder="策略名称">
+                <div class="stdiff-worldbook-meta">
+                  <label for="stdiff-noass-worldbook-order">全局排序</label>
+                  <input type="number" class="text_pole" id="stdiff-noass-worldbook-order" min="0" step="1">
+                </div>
+              </div>
+              <div class="stdiff-worldbook-summary" id="stdiff-noass-worldbook-summary"></div>
+
+              <div class="stdiff-worldbook-grid">
               <div class="stdiff-worldbook-column">
                 <div class="stdiff-fieldset">
                   <div class="stdiff-fieldset-title">深度选择</div>
@@ -145,7 +177,7 @@
                 </div>
               </div>
 
-              <div class="stdiff-worldbook-column">
+                <div class="stdiff-worldbook-column">
                 <div class="stdiff-fieldset">
                   <div class="stdiff-fieldset-title">目标位置</div>
                   <label for="stdiff-noass-worldbook-target-anchor">目标锚点</label>
@@ -177,19 +209,27 @@
                   </div>
                   <pre id="stdiff-noass-worldbook-log" class="stdiff-worldbook-log"></pre>
                 </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="stdiff-noass-block">
+          <div class="stdiff-noass-block" data-stdiff-section="storage">
             <div class="stdiff-noass-block-header">
-              <span>捕获数据存储</span>
-              <div class="stdiff-noass-btns">
-                <button class="menu_button" id="stdiff-noass-storage-refresh">刷新查看</button>
-                <button class="menu_button" id="stdiff-noass-storage-clear">清空所有存储数据</button>
+              <div class="stdiff-noass-header-main">
+                <span class="stdiff-noass-block-title">捕获数据存储</span>
+                <div class="stdiff-noass-btns">
+                  <button class="menu_button" id="stdiff-noass-storage-refresh">刷新查看</button>
+                  <button class="menu_button" id="stdiff-noass-storage-clear">清空所有存储数据</button>
+                </div>
               </div>
+              <button type="button" class="menu_button stdiff-noass-collapse" data-stdiff-collapse="storage" aria-expanded="true" title="折叠/展开">
+                <i class="fa-solid fa-chevron-up"></i>
+              </button>
             </div>
-            <div id="stdiff-noass-storage-list" class="stdiff-noass-storage"></div>
+            <div class="stdiff-noass-block-body">
+              <div id="stdiff-noass-storage-list" class="stdiff-noass-storage"></div>
+            </div>
           </div>
         </div>
       </div>

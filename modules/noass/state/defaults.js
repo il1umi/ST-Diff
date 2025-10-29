@@ -54,6 +54,7 @@ export const defaultTemplate = {
   single_user: false,
   inject_prefill: true,
   clean_clewd: false,
+  collapsed_sections: {},
 };
 
 export const defaultRule = {

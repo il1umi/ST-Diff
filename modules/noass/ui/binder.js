@@ -67,6 +67,7 @@ class NoassSettingsBinder {
     this.isUpdating = false;
     this.refreshStoredDataView = null;
     this.worldbookController = null;
+    this.sectionKeys = ['root', 'capture', 'worldbook', 'storage'];
   }
 
   withDefaults(rawDeps) {
@@ -207,7 +208,12 @@ class NoassSettingsBinder {
       $storageList: $root.find('#stdiff-noass-storage-list'),
       $storageRefresh: $root.find('#stdiff-noass-storage-refresh'),
       $storageClearAll: $root.find('#stdiff-noass-storage-clear'),
+      sections: {},
     };
+
+    this.sectionKeys.forEach((key) => {
+      this.dom.sections[key] = $root.find(`[data-stdiff-section="${key}"]`);
+    });
   }
 
   bindGeneralEvents() {
@@ -301,6 +307,16 @@ class NoassSettingsBinder {
       this.renderStoredData(template);
       this.saveDebounced();
     });
+
+    this.$root.off('click' + this.ns, '.stdiff-noass-collapse').on('click' + this.ns, '.stdiff-noass-collapse', (event) => {
+      event.preventDefault();
+      const key = $(event.currentTarget).data('stdiffCollapse');
+      if (!key) return;
+      const template = this.getActiveTemplate();
+      const collapsedMap = template?.collapsed_sections || {};
+      const isCollapsed = collapsedMap[key] === true;
+      this.setSectionCollapsed(key, !isCollapsed, template);
+    });
   }
 
   mountWorldbookControls() {
@@ -324,7 +340,9 @@ class NoassSettingsBinder {
   toggleBody() {
     if (!this.dom.$body || !this.dom.$enabled) return;
     const enabled = this.dom.$enabled.prop('checked');
-    this.dom.$body.toggle(!!enabled);
+    const template = this.getActiveTemplate();
+    const collapsed = template?.collapsed_sections?.root === true;
+    this.dom.$body.toggle(!!enabled && !collapsed);
   }
 
   bindTextInput($input, key) {
@@ -530,6 +548,7 @@ class NoassSettingsBinder {
 
     this.renderRules(template.capture_rules);
     this.renderStoredData(template);
+    this.applyCollapsedSections(template);
 
     this.isUpdating = false;
     this.toggleBody();
@@ -660,6 +679,57 @@ class NoassSettingsBinder {
     return $('<label class="stdiff-noass-field"></label>')
       .append(`<span>${label}</span>`)
       .append($element);
+  }
+
+  applyCollapsedSections(template) {
+    const activeTemplate = template || this.getActiveTemplate();
+    const collapsed = activeTemplate && typeof activeTemplate.collapsed_sections === 'object'
+      ? activeTemplate.collapsed_sections
+      : {};
+    this.sectionKeys.forEach((key) => {
+      const isCollapsed = collapsed[key] === true;
+      this.setSectionCollapsed(key, isCollapsed, activeTemplate, { save: false });
+    });
+  }
+
+  setSectionCollapsed(key, collapsed, template = this.getActiveTemplate(), options = {}) {
+    const resolvedTemplate = template || this.getActiveTemplate();
+    if (!resolvedTemplate) return;
+
+    if (!resolvedTemplate.collapsed_sections || typeof resolvedTemplate.collapsed_sections !== 'object') {
+      resolvedTemplate.collapsed_sections = {};
+    }
+
+    const targetState = !!collapsed;
+    const previous = resolvedTemplate.collapsed_sections[key] === true;
+
+    if (!this.dom.sections) {
+      this.dom.sections = {};
+    }
+
+    const $block = this.dom.sections[key]?.length
+      ? this.dom.sections[key]
+      : this.$root.find(`[data-stdiff-section="${key}"]`);
+
+    if ($block?.length) {
+      this.dom.sections[key] = $block;
+      $block.toggleClass('is-collapsed', targetState);
+
+      const $toggle = $block.find('.stdiff-noass-collapse').first();
+      if ($toggle.length) {
+        $toggle.attr('aria-expanded', String(!targetState));
+      }
+    }
+
+    resolvedTemplate.collapsed_sections[key] = targetState;
+
+    if (key === 'root') {
+      this.toggleBody();
+    }
+
+    if (options.save !== false && previous !== targetState) {
+      this.saveDebounced();
+    }
   }
 
   saveDebounced() {
