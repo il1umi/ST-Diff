@@ -84,6 +84,12 @@ async function init() {
     console.warn('[ST-Diff] noass 初始化失败', e);
   }
 
+  try {
+    await Modules.macros.mount(ctx);
+  } catch (e) {
+    console.warn('[ST-Diff] macros 初始化失败', e);
+  }
+
   // 页面感知式装载模块（世界书优先，预设占位）
   setupPageAwareMount(ctx);
 }
@@ -113,6 +119,32 @@ const Modules = {
         }
       } catch (e) {
         console.warn('[ST-Diff] noass 模块卸载失败', e);
+      }
+    },
+  },
+  macros: {
+    mounted: false,
+    async mount(ctx) {
+      if (this.mounted) return;
+      this.mounted = true;
+      try {
+        const mod = await import('./modules/macros/index.js');
+        await mod.mount(ctx);
+      } catch (e) {
+        console.warn('[ST-Diff] macros 模块加载失败', e);
+        this.mounted = false;
+      }
+    },
+    async unmount(ctx) {
+      if (!this.mounted) return;
+      this.mounted = false;
+      try {
+        const mod = await import('./modules/macros/index.js');
+        if (typeof mod.unmount === 'function') {
+          await mod.unmount(ctx);
+        }
+      } catch (e) {
+        console.warn('[ST-Diff] macros 模块卸载失败', e);
       }
     },
   },
@@ -178,6 +210,12 @@ function updateModulesVisibility(ctx){
     Modules.noass.mount(ctx);
   } catch (e) {
     console.warn('[ST-Diff] noass 可见性更新失败', e);
+  }
+
+  try {
+    Modules.macros.mount(ctx);
+  } catch (e) {
+    console.warn('[ST-Diff] macros 可见性更新失败', e);
   }
 }
 

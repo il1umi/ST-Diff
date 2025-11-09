@@ -1,5 +1,5 @@
 /**
- * @file 负责将世界书策略配置规范化为运行期结构，并生成哨兵前缀。
+ * @file 负责将世界书策略配置规范化为运行期结构，并生成目标标记前缀。
  */
 import {
   WORLD_BOOK_GROUP_MODES,
@@ -8,15 +8,15 @@ import {
 import { WORLD_BOOK_DEFAULT_ROLE, WORLD_BOOK_SENTINEL_PREFIX } from '../clewd/constants.js';
 
 /**
- * 生成世界书哨兵前缀。
+ * 生成世界书目标标记前缀。
  * @param {number} index
  * @returns {string}
  */
 /**
- * 生成唯一的世界书哨兵前缀，用于包裹启用条目段落。
+ * 生成唯一的世界书目标标记前缀，用于包裹启用条目段落。
  *
  * @param {number} [index=0] 基于顺序生成的标识
- * @returns {string} 哨兵前缀
+ * @returns {string} 目标标记前缀
  */
 export function generateSentinelPrefix(index = 0) {
   return `${WORLD_BOOK_SENTINEL_PREFIX}${index}__`;

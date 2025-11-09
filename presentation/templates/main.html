@@ -6,7 +6,7 @@
       <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
     </div>
     <div class="inline-drawer-content">
-      <div style="margin:6px 0;">
+      <div class="stdiff-global-toggle">
         <label class="checkbox_label"><input type="checkbox" id="stdiff-enabled"> 启用世界书对比</label>
       </div>
 
@@ -231,8 +231,38 @@
               <div id="stdiff-noass-storage-list" class="stdiff-noass-storage"></div>
             </div>
           </div>
+        </div><!-- end #stdiff-noass-body -->
+      </div><!-- end #stdiff-noass -->
+  
+      <div id="stdiff-macros" class="stdiff-section" data-stdiff-section="macros">
+      <div class="stdiff-section-header">
+        <div class="stdiff-macros-header-main">
+          <label class="checkbox_label">
+            <input type="checkbox" id="stdiff-macros-enabled">
+            启用宏模块
+          </label>
+          <span class="stdiff-macros-title">宏管理</span>
+          <div class="stdiff-macros-actions" data-macros-actions></div>
+        </div>
+        <button type="button" class="menu_button stdiff-macros-collapse" data-stdiff-collapse="macros" aria-expanded="true" title="折叠/展开">
+          <i class="fa-solid fa-chevron-up"></i>
+        </button>
+      </div>
+      <div class="stdiff-section-body" id="stdiff-macros-body">
+        <div class="stdiff-macros" data-macros-panel>
+          <nav class="stdiff-macros-tabs" data-macros-tabs>
+            <button type="button" class="menu_button is-active" data-tab="roulette">Roulette宏</button>
+            <button type="button" class="menu_button" data-tab="cascade">Cascade宏</button>
+          </nav>
+          <div class="stdiff-macros-content">
+            <div class="stdiff-macros-pane is-active" data-pane="roulette"></div>
+            <div class="stdiff-macros-pane" data-pane="cascade"></div>
+          </div>
         </div>
       </div>
+    </div>
+
+    </div>
 
       <!-- 以下为占位，将在后续启用 -->
       <div class="st-diff-toolbar" style="display:none">

@@ -71,8 +71,11 @@
 #st-diff .stdiff-section { border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 8px; padding: 12px; margin: 10px 0 16px; background: rgba(0,0,0,0.15); }
 #st-diff .stdiff-section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 #st-diff .stdiff-section.is-collapsed .stdiff-section-body { display: none; }
+/* 折叠图标旋转：noass 与 macros 均保持一致 */
 #st-diff .stdiff-section.is-collapsed .stdiff-noass-collapse i { transform: rotate(180deg); }
+#st-diff .stdiff-section.is-collapsed .stdiff-macros-collapse i { transform: rotate(180deg); }
 #st-diff .stdiff-section-body { display: flex; flex-direction: column; gap: 14px; }
+#st-diff .stdiff-global-toggle { margin: 6px 0 10px; }
 
 #st-diff .stdiff-noass-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 #st-diff .stdiff-noass-label { font-weight: 600; min-width: 72px; }
@@ -111,3 +114,198 @@
 
 /* 当 noass 主体隐藏时 */
 #st-diff .stdiff-section-body[style*="display: none"] { display: none !important; }
+
+#st-diff .stdiff-section-body[style*="display: none"] { display: none !important; }
+
+#st-diff .stdiff-macros { display: grid; gap: 12px; }
+#st-diff .stdiff-macros-tabs { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#st-diff .stdiff-macros-tabs .menu_button { min-width: 96px; }
+#st-diff .stdiff-macros-tabs .menu_button.is-active,
+#st-diff .stdiff-macros-tabs .menu_button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--SmartThemeAccentColor, #3a7bd5);
+}
+#st-diff .stdiff-macros-content {
+  border: 1px solid var(--SmartThemeBorderColor, #444);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.1);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#st-diff .stdiff-macros-pane { display: none; flex-direction: column; gap: 12px; }
+#st-diff .stdiff-macros-pane.is-active { display: flex; }
+#st-diff .stdiff-macros-toolbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+#st-diff .stdiff-macros-toolbar__primary,
+#st-diff .stdiff-macros-toolbar__secondary {
+  display: contents; /* 子按钮直接参与上层 grid 布局，实现均匀分布 */
+}
+@media (max-width: 720px) {
+  #st-diff .stdiff-macros-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  #st-diff .stdiff-macros-toolbar__indicator {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 6px;
+  }
+}
+/* 禁用态按钮弱化 */
+#st-diff .stdiff-macros-toolbar__button.is-disabled { opacity: .5; pointer-events: none; }
+#st-diff .stdiff-macros-list {
+  border: 1px solid var(--SmartThemeBorderColor, #444);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#st-diff .stdiff-macros-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(80px, 120px) minmax(72px, 100px) auto;
+  gap: 8px;
+  padding: 8px 10px;
+  align-items: center;
+}
+#st-diff .stdiff-macros-row:nth-child(odd) { background: rgba(255,255,255,0.04); }
+#st-diff .stdiff-macros-row input[type="text"],
+#st-diff .stdiff-macros-row input[type="number"] { width: 100%; }
+#st-diff .stdiff-macros-row .stdiff-macros-row-actions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+#st-diff .stdiff-macros-empty { padding: 12px; text-align: center; opacity: .7; font-style: italic; }
+#st-diff .stdiff-macros-preview {
+  border: 1px dashed var(--SmartThemeBorderColor, #444);
+  border-radius: 6px;
+  padding: 10px;
+  font-family: var(--stdiff-mono, var(--mono, 'Fira Code', monospace));
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 56px;
+  background: rgba(0,0,0,0.08);
+}
+#st-diff .stdiff-macros-inline-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+#st-diff .stdiff-macros-range-inputs {
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  align-items: center;
+}
+#st-diff .stdiff-macros-checkboxes { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+#st-diff .stdiff-macros-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+#st-diff .stdiff-macros-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+#st-diff .stdiff-macros-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--SmartThemeBorderColor, #444);
+  background: rgba(0,0,0,0.12);
+  font-size: 12px;
+}
+#st-diff .stdiff-macros-tag button { border: none; background: transparent; color: inherit; cursor: pointer; padding: 0 2px; font-size: 12px; }
+#st-diff .stdiff-macros-inline-preview { display: flex; flex-direction: column; gap: 6px; }
+
+/* --- BEM (__*) 别名，兼容面板实现使用的类名 --- */
+#st-diff .stdiff-macros__list {
+  border: 1px solid var(--SmartThemeBorderColor, #444);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#st-diff .stdiff-macros__row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(80px, 120px) minmax(72px, 100px) auto;
+  gap: 8px;
+  padding: 8px 10px;
+  align-items: center;
+}
+#st-diff .stdiff-macros__row:nth-child(odd) { background: rgba(255,255,255,0.04); }
+#st-diff .stdiff-macros__input { width: 100%; }
+#st-diff .stdiff-macros__cell { display: flex; align-items: center; }
+#st-diff .stdiff-macros__delete { display: inline-flex; align-items: center; justify-content: center; }
+
+#st-diff .stdiff-macros__preview {
+  border: 1px dashed var(--SmartThemeBorderColor, #444);
+  border-radius: 6px;
+  padding: 10px;
+  font-family: var(--stdiff-mono, var(--mono, 'Fira Code', monospace));
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 56px;
+  background: rgba(0,0,0,0.08);
+}
+#st-diff .stdiff-macros__preview.is-loading { opacity: .8; }
+#st-diff .stdiff-macros__preview.is-error { border-color: #c55; }
+#st-diff .stdiff-macros__preview.is-success { border-color: var(--SmartThemeAccentColor, #3a7bd5); }
+
+/* 表单基础布局（__ 前缀） */
+#st-diff .stdiff-macros-form { display: flex; flex-direction: column; gap: 10px; }
+/* 表单行采用两列栅格：左侧标签固定宽度，右侧控件占满 */
+#st-diff .stdiff-macros-form__row { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: start; }
+#st-diff .stdiff-macros-form__row--inline { display: inline-flex; gap: 8px; align-items: center; }
+#st-diff .stdiff-macros-form__row--split { display: grid; gap: 8px 12px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: center; }
+#st-diff .stdiff-macros-form__label { min-width: 64px; white-space: nowrap; display: inline-flex; align-items: center; }
+#st-diff .stdiff-macros-form__label--inline { min-width: auto; }
+/* 输入控件占满可用列，避免被压缩导致出现横向滚动 */
+#st-diff .stdiff-macros-form__control { width: 100%; min-width: 0; box-sizing: border-box; }
+#st-diff .stdiff-macros-form__control--compact { min-width: 100px; }
+/* 文本域禁用横向滚动与原生拖角，使用自动高度（JS绑定） */
+#st-diff .stdiff-macros-form__control.textarea,
+#st-diff .stdiff-macros__input--value.textarea { min-height: 72px; resize: none; overflow-x: hidden; overflow-y: auto; }
+@media (max-width: 720px) {
+  #st-diff .stdiff-macros-form__row { grid-template-columns: 1fr; }
+  #st-diff .stdiff-macros-form__label { margin-bottom: 6px; }
+}
+
+/* 工具栏扩展类 */
+#st-diff .stdiff-macros-toolbar__divider { width: 1px; height: 20px; background: var(--SmartThemeBorderColor, #444); margin: 0 6px; }
+#st-diff .stdiff-macros-toolbar__spacer { flex: 1 1 auto; }
+/* 指示对齐到右侧并预留宽度，避免与按钮抢位 */
+#st-diff .stdiff-macros-toolbar__indicator { opacity: .8; font-size: 12px; margin-left: 8px; justify-self: end; min-width: 160px; }
+/* 列表主列（标签+内容）内部栅格，确保宽度占满且不遮挡 */
+#st-diff .stdiff-macros__inputs { display: grid; grid-template-columns: 1fr; gap: 6px; min-width: 0; }
+/* 候选项内容文本域基础高度与滚动策略 */
+#st-diff .stdiff-macros__input--value.textarea { min-height: 60px; resize: none; overflow-x: hidden; overflow-y: auto; }
+
+/* macros groupbar: 横排组导航（上一组 / 索引 / 下一组 / 新建 / 复制 / 删除） */
+#st-diff .stdiff-macros-groupbar {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+#st-diff .stdiff-macros-groupbar .menu_button {
+  width: auto;
+  white-space: nowrap;
+}
+#st-diff .stdiff-macros-groupbar__index {
+  font-weight: 600;
+  min-width: 72px;
+  text-align: center;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+#st-diff .stdiff-macros-groupbar__spacer {
+  display: block; /* 作为 1fr 栏位的占位，拉伸留白 */
+  width: 100%;
+}
+@media (max-width: 720px) {
+  #st-diff .stdiff-macros-groupbar {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 8px;
+  }
+  #st-diff .stdiff-macros-groupbar__index {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+}
