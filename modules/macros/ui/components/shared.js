@@ -2,6 +2,7 @@ import { MACRO_KEYS, EXTENSION_KEY } from '../../constants.js';
 import { importModule, saveMacrosState } from '../../state/manager.js';
 
 const TAG = '[ST-Diff][macros:UI]';
+const MACROS_DOC_URL = '/scripts/extensions/third-party/ST-Diff/macros.md';
 
 const TAB_LABELS = {
     [MACRO_KEYS.ROULETTE]: 'Roulette宏',
@@ -159,8 +160,7 @@ export function renderToolbar(ctx, state, context) {
             }
 
             notify(ctx, `当前标签暂未实现“${ACTION_LABELS[action] ?? action}”操作`, 'warning');
-        })
-        ;
+        });
 
     const updateActiveTab = (tabOverride) => {
         const tab = tabOverride && TAB_LABELS[tabOverride]
@@ -182,8 +182,6 @@ export function renderToolbar(ctx, state, context) {
         if (!enabled) {
             $tabIndicator.text(`当前标签：${TAB_LABELS[tab] ?? tab}（宏已禁用）`);
         }
-
-    
     };
 
     updateActiveTab();
@@ -726,6 +724,266 @@ export function notify(ctx, message, type = 'info') {
     } else {
         console.log(TAG, message);
     }
+}
+
+/**
+ * 打开宏文档弹窗：加载 ST-Diff/macros.md，使用酒馆 markdown渲染（showdown + DOMPurify）转换为html，
+ * 然后通过callGenericPopup展示。若缺少 md 渲染，则回退为纯文本显示
+ *
+ * 运行时直接从扩展目录读取 md，并使用酒馆全局的 showdown 管线进行渲染。
+ * 若任一依赖缺失（showdown / DOMPurify / callGenericPopup），则不抛出到调用侧  而是回退为纯文本弹窗
+ *
+ * @param {ReturnType<typeof import('../../../index.js')['getCtx']>} ctx
+ * @param {'roulette'|'cascade'} [tab] 当前激活的标签，用于在弹窗中滚动到对应小节
+ */
+export async function openMacrosDocs(ctx, tab) {
+    try {
+        // 优先方案（更新）：若模板目录存在 Markdown 且宿主具备 showdown，则优先用 Markdown 渲染，便于测试/本地化
+        try {
+            const tmplMdResHead = await fetch('/scripts/extensions/third-party/ST-Diff/presentation/templates/macros-docs.md', { cache: 'no-cache' });
+            if (tmplMdResHead?.ok) {
+                const tmplMd = await tmplMdResHead.text();
+                const htmlFromMd = renderMarkdownToHtmlSafe(tmplMd);
+
+                const content = document.createElement('div');
+                content.className = 'stdiff-doc stdiff-doc--macros';
+                content.innerHTML = htmlFromMd;
+
+                const callPopup = resolveCallGenericPopup(ctx);
+                const popupType = resolvePopupType(ctx);
+                const onOpen = createDocsOnOpenHandler(tab);
+
+                await callPopup(content, popupType, '', {
+                    wide: true,
+                    large: true,
+                    allowVerticalScrolling: true,
+                    leftAlign: true,
+                    onOpen,
+                });
+                return;
+            }
+        } catch (mdFirstErr) {
+            console.debug(TAG, 'markdown 渲染检测失败，尝试 HTML 模板', mdFirstErr);
+        }
+
+        // 次方案：加载预编译的html模板，避免运行时依赖 showdown/DOMPurify，获得更快的弹窗展示
+        // 模板路径与主面板一致：third-party/ST-Diff/presentation/templates/macros-docs.html
+        const base = 'third-party/ST-Diff/presentation/templates';
+        if (ctx?.renderExtensionTemplateAsync) {
+            try {
+                const tplHtml = await ctx.renderExtensionTemplateAsync(base, 'macros-docs');
+                if (tplHtml && typeof tplHtml === 'string') {
+                    const content = document.createElement('div');
+                    content.className = 'stdiff-doc stdiff-doc--macros';
+                    content.innerHTML = tplHtml;
+
+                    const callPopup = resolveCallGenericPopup(ctx);
+                    const popupType = resolvePopupType(ctx);
+                    const onOpen = createDocsOnOpenHandler(tab);
+
+                    await callPopup(content, popupType, '', {
+                        wide: true,
+                        large: true,
+                        allowVerticalScrolling: true,
+                        leftAlign: true,
+                        onOpen,
+                    });
+                    return; // 模板成功则直接返回
+                }
+            } catch (e) {
+                console.debug(TAG, '预编译文档模板不可用，尝试加载模板目录中的 Markdown', e);
+            }
+        }
+
+        // 尝试从模板目录加载 md（macros-docs.md），若存在则用酒馆 md 渲染
+        try {
+            const tmplMdRes = await fetch('/scripts/extensions/third-party/ST-Diff/presentation/templates/macros-docs.md', { cache: 'no-cache' });
+            if (tmplMdRes?.ok) {
+                const tmplMd = await tmplMdRes.text();
+                const htmlFromMd = renderMarkdownToHtmlSafe(tmplMd);
+
+                const content = document.createElement('div');
+                content.className = 'stdiff-doc stdiff-doc--macros';
+                content.innerHTML = htmlFromMd;
+
+                const callPopup = resolveCallGenericPopup(ctx);
+                const popupType = resolvePopupType(ctx);
+                const onOpen = createDocsOnOpenHandler(tab);
+
+                await callPopup(content, popupType, '', {
+                    wide: true,
+                    large: true,
+                    allowVerticalScrolling: true,
+                    leftAlign: true,
+                    onOpen,
+                });
+                return;
+            }
+        } catch (e2) {
+            console.debug(TAG, '模板目录 Markdown 不可用，继续使用根目录 macros.md', e2);
+        }
+
+        // 回退方案：运行时加载根目录 md 并使用酒馆的 showdown + DOMPurify 渲染
+        const response = await fetch(MACROS_DOC_URL, { cache: 'no-cache' });
+        if (!response?.ok) {
+            throw new Error(`请求宏文档失败：HTTP ${response.status}`);
+        }
+
+        const markdown = await response.text();
+        const html = renderMarkdownToHtmlSafe(markdown);
+
+        const content = document.createElement('div');
+        content.className = 'stdiff-doc stdiff-doc--macros';
+        content.innerHTML = html;
+
+        const callPopup = resolveCallGenericPopup(ctx);
+        const popupType = resolvePopupType(ctx);
+        const onOpen = createDocsOnOpenHandler(tab);
+
+        await callPopup(content, popupType, '', {
+            wide: true,
+            large: true,
+            allowVerticalScrolling: true,
+            leftAlign: true,
+            onOpen,
+        });
+    } catch (error) {
+        console.warn(TAG, '打开宏文档失败，回退为纯文本展示', error);
+        const fallbackText = '无法加载宏文档（macros.md / 预编译模板）。\n\n错误信息：' + (error?.message || String(error));
+
+        try {
+            const callPopup = resolveCallGenericPopup(ctx);
+            const popupType = resolvePopupType(ctx);
+
+            await callPopup(
+                `<pre class="stdiff-doc stdiff-doc--fallback">${escapeHtml(fallbackText)}</pre>`,
+                popupType,
+                '',
+                {
+                    wide: true,
+                    large: false,
+                    allowVerticalScrolling: true,
+                    leftAlign: true,
+                },
+            );
+        } catch (innerError) {
+            // 连弹窗都不可用时，只能最后写日志
+            console.error(TAG, '宏文档回退弹窗也失败', innerError);
+        }
+    }
+}
+
+/**
+ * 使用酒馆提供的showdown + DOMPurify（若存在）将 md 转换为 html
+ * 若缺少任一依赖，则退回为简单的 <pre> 文本
+ *
+ * @param {string} markdown
+ * @returns {string}
+ */
+function renderMarkdownToHtmlSafe(markdown) {
+    const showdownGlobal = window.showdown;
+    const domPurifyGlobal = window.DOMPurify;
+
+    if (showdownGlobal && typeof showdownGlobal.Converter === 'function') {
+        try {
+            const converter = new showdownGlobal.Converter();
+            let rawHtml = converter.makeHtml(markdown);
+
+            if (domPurifyGlobal && typeof domPurifyGlobal.sanitize === 'function') {
+                rawHtml = domPurifyGlobal.sanitize(rawHtml);
+            }
+
+            return rawHtml;
+        } catch (error) {
+            console.warn(TAG, 'Markdown 渲染失败，使用纯文本回退', error);
+        }
+    }
+
+    // 回退：简单转义 + 保留换行
+    return `<pre class="stdiff-doc stdiff-doc--fallback">${escapeHtml(markdown)}</pre>`;
+}
+
+/**
+ * 解析可用的callGenericPopup。
+ * 优先使用ctx.callGenericPopup，其次使用全局window.callGenericPopup。
+ *
+ * @param {any} ctx
+ * @returns {(content:any, type:any, inputValue?:string, options?:any) => Promise<any>}
+ */
+function resolveCallGenericPopup(ctx) {
+    const fromCtx = ctx?.callGenericPopup;
+    if (typeof fromCtx === 'function') {
+        return fromCtx.bind(ctx);
+    }
+
+    const fromWindow = window.callGenericPopup;
+    if (typeof fromWindow === 'function') {
+        return fromWindow;
+    }
+
+    throw new Error('宿主缺少 callGenericPopup，无法展示宏文档。');
+}
+
+/**
+ * 解析POPUP_TYPE.TEXT
+ *
+ * @param {any} ctx
+ * @returns {number}
+ */
+function resolvePopupType(ctx) {
+    const typeFromCtx = ctx?.POPUP_TYPE?.TEXT;
+    if (typeof typeFromCtx !== 'undefined') {
+        return typeFromCtx;
+    }
+
+    const typeFromWindow = window.POPUP_TYPE?.TEXT;
+    if (typeof typeFromWindow !== 'undefined') {
+        return typeFromWindow;
+    }
+
+    // 默认值：TEXT = 1（见popup.js定义）
+    return 1;
+}
+
+/**
+ * 创建文档弹窗的onOpen回调，在弹出后滚动到对应小节
+ *
+ * @param {'roulette'|'cascade'} [tab]
+ * @returns {(popup:any) => void}
+ */
+function createDocsOnOpenHandler(tab) {
+    const targetId = tab === MACRO_KEYS.CASCADE
+        ? 'stdiff-doc-cascade'
+        : 'stdiff-doc-roulette';
+
+    return (popup) => {
+        try {
+            const root = popup?.content || popup?.dlg?.querySelector?.('.popup-content') || null;
+            if (!root) return;
+
+            const anchor = root.querySelector?.(`#${targetId}`);
+            if (anchor && typeof anchor.scrollIntoView === 'function') {
+                anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } catch (error) {
+            console.warn(TAG, '文档弹窗 onOpen 处理失败', error);
+        }
+    };
+}
+
+/**
+ * 简单的html转义，用于fallback模式
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, '&' + 'amp;')
+        .replace(/</g, '&' + 'lt;')
+        .replace(/>/g, '&' + 'gt;')
+        .replace(/"/g, '&' + 'quot;')
+        .replace(/'/g, '&#39;');
 }
 
 /* -------------------------------------------------------------------------- */

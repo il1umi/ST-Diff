@@ -12,6 +12,7 @@ import {
     scrollIntoView,
     clearFieldError,
     setFieldError,
+    openMacrosDocs,
 } from './shared.js';
 import {
     createDefaultCascadeGroup,
@@ -30,7 +31,6 @@ import { generateId } from '../../runtime/utils.js';
 import { execute as executeCascade } from '../../runtime/cascade.js';
 import { createEvaluator } from '../../runtime/evaluator.js';
 
-const DOC_URL = 'https://docs.sillytavern.app/extensions/st-diff/macros/cascade';
 const SORT_OPTIONS = [
     { value: 'none', label: '保持顺序' },
     { value: 'asc', label: '升序排序' },
@@ -70,7 +70,8 @@ export function renderCascadePanel(ctx, state, context) {
         importData: () => handleImport(),
         exportData: () => handleExport(),
         preview: () => runPreview(),
-        openDocs: () => window.open(DOC_URL, '_blank', 'noopener'),
+        // 使用共享文档 Helper：根据当前 Tab 打开并定位到 Cascade 小节
+        openDocs: () => openMacrosDocs(ctx, MACRO_KEYS.CASCADE),
     });
     cleanupStack.push(unregisterToolbar);
 

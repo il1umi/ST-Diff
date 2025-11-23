@@ -309,3 +309,34 @@
     justify-self: center;
   }
 }
+
+/* 宏文档弹窗内容区域 */
+#st-diff .stdiff-doc {
+  max-height: 70vh;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+#st-diff .stdiff-doc h2,
+#st-diff .stdiff-doc h3 {
+  margin: 0.4em 0 0.2em;
+  font-weight: 600;
+}
+#st-diff .stdiff-doc p {
+  margin: 0.25em 0;
+}
+#st-diff .stdiff-doc code {
+  font-family: var(--stdiff-mono, var(--mono, 'Fira Code', monospace));
+}
+#st-diff .stdiff-doc pre {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.12);
+  border: 1px solid var(--SmartThemeBorderColor, #444);
+  overflow-x: auto;
+}
+#st-diff .stdiff-doc--fallback {
+  font-family: var(--stdiff-mono, var(--mono, 'Fira Code', monospace));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
