@@ -79,6 +79,26 @@ export function cloneTemplate(template) {
 }
 
 /**
+ * 规范化布尔值，兼容 'true'/'false'、'1'/'0'、'yes'/'no'、数值与空串等历史存储形态。
+ * @param {*} value 原值
+ * @param {boolean} def 默认值
+ * @returns {boolean}
+ */
+function normalizeBool(value, def = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(v)) return true;
+    if (['false', '0', 'no', 'off', ''].includes(v)) return false;
+    return def;
+  }
+  if (typeof value === 'number') return value !== 0;
+  if (value == null) return def;
+  // 其他类型（对象/函数等）一律回退默认
+  return def;
+}
+
+/**
  * 为模板补齐默认字段，保持向后兼容。
  */
 /**
@@ -113,11 +133,12 @@ export function ensureTemplateDefaults(template) {
     template.stored_data = {};
   }
 
-  if (typeof template.capture_enabled === 'undefined') template.capture_enabled = true;
-  if (typeof template.single_user === 'undefined') template.single_user = false;
-  if (typeof template.inject_prefill === 'undefined') template.inject_prefill = true;
-  if (typeof template.clean_clewd === 'undefined') template.clean_clewd = false;
-  if (typeof template.debug_worldbook !== 'boolean') template.debug_worldbook = false;
+  // 统一布尔字段为严格布尔，修复历史上可能存成字符串 "false"/"true" 导致 !!value 判定错误的问题
+  template.capture_enabled = normalizeBool(template.capture_enabled, true);
+  template.single_user = normalizeBool(template.single_user, false);
+  template.inject_prefill = normalizeBool(template.inject_prefill, true);
+  template.clean_clewd = normalizeBool(template.clean_clewd, false);
+  template.debug_worldbook = normalizeBool(template.debug_worldbook, false);
 
   sanitizeWorldbookGroups(template);
   return template;

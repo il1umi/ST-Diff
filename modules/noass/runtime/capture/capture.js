@@ -275,6 +275,11 @@ export function parseRangeIndex(indexStr, arrayLength) {
  * @returns {string} 替换后的文本
  */
 export function replaceTagsWithStoredData(content, template, cleanEmpty = false) {
+  // 非字符串内容直接返回原值，确保保留 tool_calls / 多模态数组等结构
+  if (typeof content !== 'string') {
+    return content;
+  }
+
   const storedData = ensureStoredDataContainer(template);
   const tags = new Set(Object.keys(storedData));
   if (cleanEmpty) {

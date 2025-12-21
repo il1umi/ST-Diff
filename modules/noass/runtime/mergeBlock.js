@@ -67,7 +67,9 @@ function buildRuntimeConfig(template) {
     groups: buildWorldbookRuntimeGroups(template),
     snapshot: exportWorldbookSnapshot(),
   };
-
+  // 在同一轮 completion 中只注入一次 prefill（即使因 NO_TRANS_TAG 拆分为多个合并块）
+  config.__prefillInjected = false;
+ 
   attachDryRunHelpers(config);
   return config;
 }
@@ -85,6 +87,83 @@ function insertAfterLastOccurrence(haystack, needle, insertText) {
   if (index === -1) return haystack;
   const offset = index + needle.length;
   return `${haystack.slice(0, offset)}${insertText}${haystack.slice(offset)}`;
+}
+
+/**
+ * 判断消息内容是否包含 NO_TRANS_TAG，兼容字符串与多模态数组（{type:'text', text:'...'}）
+ * @param {string|Array<any>} content
+ * @returns {boolean}
+ */
+function contentHasNoTrans(content) {
+  if (typeof content === 'string') {
+    return content.indexOf(NO_TRANS_TAG) !== -1;
+  }
+  if (Array.isArray(content)) {
+    return content.some((part) => part && typeof part.text === 'string' && part.text.indexOf(NO_TRANS_TAG) !== -1);
+  }
+  if (content && typeof content === 'object' && typeof content.text === 'string') {
+    // 兼容单对象形态：{ type: 'text', text: '...' }
+    return content.text.indexOf(NO_TRANS_TAG) !== -1;
+  }
+  return false;
+}
+
+/**
+ * 从内容中移除 NO_TRANS_TAG；字符串直接替换，数组则替换各 text，空白项会被剔除
+ * @param {string|Array<any>} content
+ * @returns {string|Array<any>}
+ */
+function stripNoTrans(content) {
+  if (typeof content === 'string') {
+    return content.split(NO_TRANS_TAG).join('').trim();
+  }
+  if (Array.isArray(content)) {
+    const next = [];
+    for (const part of content) {
+      if (part && typeof part.text === 'string') {
+        const t = part.text.split(NO_TRANS_TAG).join('').trim();
+        if (t) {
+          next.push({ ...part, text: t });
+        }
+      } else if (part != null) {
+        next.push(part);
+      }
+    }
+    return next;
+  }
+  if (content && typeof content === 'object' && typeof content.text === 'string') {
+    // 兼容单对象形态：{ type: 'text', text: '...' }
+    const t = content.text.split(NO_TRANS_TAG).join('').trim();
+    return t ? { ...content, text: t } : '';
+  }
+  return content;
+}
+
+/**
+ * 将来自宿主的非标准角色（如 'model'）规范化为合并兼容的角色
+ * @param {string} role
+ * @returns {'user'|'assistant'|'system'}
+ */
+function normalizeRole(role) {
+  const r = String(role || '').toLowerCase();
+  if (r === 'user' || r === 'assistant' || r === 'system') return /** @type any */(r);
+  // 非标准角色（例如 model）一律按 assistant 处理，避免被 clewd 前缀误归为 user
+  return 'assistant';
+}
+
+/**
+ * 判断内容是否为空（字符串全空白，或数组中没有非空白 text）
+ * @param {string|Array<any>} content
+ * @returns {boolean}
+ */
+function isEmptyContent(content) {
+  if (typeof content === 'string') {
+    return content.trim().length === 0;
+  }
+  if (Array.isArray(content)) {
+    return content.every((part) => !part || typeof part.text !== 'string' || part.text.trim().length === 0);
+  }
+  return !content;
 }
 
 /**
@@ -106,7 +185,7 @@ export function processAndAddMergeBlock(template, config, blockToMerge, targetAr
   if (config.capture_enabled && config.capture_rules?.length) {
     let combinedContent = '';
     for (const message of blockToMerge) {
-      if (message?.content) {
+      if (message?.content && typeof message.content === 'string') {
         combinedContent += (combinedContent ? '\n\n' : '') + message.content;
       }
     }
@@ -247,14 +326,33 @@ export function processAndAddMergeBlock(template, config, blockToMerge, targetAr
   }
 
   const prefill = config.prefill_user || defaultTemplate.prefill_user;
-  if (config.inject_prefill !== false && prefill && prefill.trim()) {
+  // 仅在第一次合并块前注入 prefill；之后即便因 NO_TRANS_TAG 产生新块也不再重复注入
+  if (config.inject_prefill !== false && prefill && prefill.trim() && !config.__prefillInjected) {
+    try {
+      console.debug('[ST-Diff][noass] inject prefill before merged block', {
+        inject_prefill: config.inject_prefill !== false,
+        has_prefill: !!prefill,
+      });
+    } catch {}
     targetArray.push({
       role: 'user',
       content: prefill,
     });
+    config.__prefillInjected = true;
   }
 
-  mergedAssistantMessage.role = config.single_user ? 'user' : 'assistant';
+  const assignedRole = config.single_user ? 'user' : 'assistant';
+  mergedAssistantMessage.role = assignedRole;
+  try {
+    const preview = typeof summarizeTextForDiagnostics === 'function'
+      ? summarizeTextForDiagnostics(mergedAssistantMessage.content || '', 80)
+      : (mergedAssistantMessage?.content || '').slice(0, 80);
+    console.debug('[ST-Diff][noass] merged block role assigned', {
+      single_user: !!config.single_user,
+      assignedRole,
+      contentPreview: preview,
+    });
+  } catch {}
   if (mergedAssistantMessage.content && mergedAssistantMessage.content.trim()) {
     targetArray.push(mergedAssistantMessage);
   }
@@ -321,8 +419,6 @@ export function handleCompletion(ctx, state, completion) {
     state.templates[state.active] || state.templates[Object.keys(state.templates)[0]];
   if (!template) return;
 
-  const mainApi = ctx?.mainApi;
-  if (mainApi && mainApi !== 'openai') return;
 
   const sanitizedTemplate = ensureTemplateDefaults(template);
   const config = buildRuntimeConfig(sanitizedTemplate);
@@ -333,6 +429,7 @@ export function handleCompletion(ctx, state, completion) {
     template: cloneTemplate(sanitizedTemplate),
     messages: cloneMessageArray(originalMessages),
     timestamp: Date.now(),
+    source: completion?.chat_completion_source ?? null,
   };
 
   const finalMessages = [];
@@ -340,7 +437,8 @@ export function handleCompletion(ctx, state, completion) {
   let storedChanged = false;
 
   for (const message of originalMessages) {
-    if (message?.content && message.content.indexOf(NO_TRANS_TAG) !== -1) {
+    if (contentHasNoTrans(message?.content)) {
+      // 命中 notrans：先冲洗当前合并块，再将本条去标记后按原角色保留
       storedChanged =
         processAndAddMergeBlock(sanitizedTemplate, config, currentMergeBlock, finalMessages) ||
         storedChanged;
@@ -348,12 +446,17 @@ export function handleCompletion(ctx, state, completion) {
 
       const messageWithoutTag = {
         role: message.role,
-        content: message.content.replace(NO_TRANS_TAG, '').trim(),
+        content: stripNoTrans(message.content),
       };
       if (message.name) messageWithoutTag.name = message.name;
 
-      if (messageWithoutTag.content) {
-        processPreservedSystemMessage(config, sanitizedTemplate, messageWithoutTag, finalMessages);
+      if (!isEmptyContent(messageWithoutTag.content)) {
+        if (typeof messageWithoutTag.content === 'string') {
+          processPreservedSystemMessage(config, sanitizedTemplate, messageWithoutTag, finalMessages);
+        } else {
+          // 非字符串内容保留原样（仅移除 notrans），不做字符串替换与系统分割
+          finalMessages.push(messageWithoutTag);
+        }
       }
     } else {
       currentMergeBlock.push(message);
@@ -425,6 +528,7 @@ export async function runWorldbookDryRun(ctx) {
   }
 
   const snapshot = lastCompletionSnapshot;
+  logAdapter.append('上下文源', { source: snapshot?.source || null }, { force: true });
   const templateClone = ensureTemplateDefaults(cloneTemplate(snapshot.template || defaultTemplate));
   const config = buildRuntimeConfig(templateClone);
   const messagesClone = cloneMessageArray(snapshot.messages || []);
@@ -452,19 +556,23 @@ export async function runWorldbookDryRun(ctx) {
     createDryRunContext();
 
     for (const message of messagesClone) {
-      if (message?.content && message.content.indexOf(NO_TRANS_TAG) !== -1) {
+      if (contentHasNoTrans(message?.content)) {
         flushMergeBlock();
 
         const messageWithoutTag = {
           role: message.role,
-          content: message.content.replace(NO_TRANS_TAG, '').trim(),
+          content: stripNoTrans(message.content),
         };
         if (message.name) {
           messageWithoutTag.name = message.name;
         }
 
-        if (messageWithoutTag.content) {
-          processPreservedSystemMessage(config, templateClone, messageWithoutTag, finalMessages);
+        if (!isEmptyContent(messageWithoutTag.content)) {
+          if (typeof messageWithoutTag.content === 'string') {
+            processPreservedSystemMessage(config, templateClone, messageWithoutTag, finalMessages);
+          } else {
+            finalMessages.push(messageWithoutTag);
+          }
         }
       } else {
         currentMergeBlock.push(message);

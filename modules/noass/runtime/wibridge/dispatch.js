@@ -90,6 +90,15 @@ export function applyWorldbookSegmentDispatch(group, segments, contentHolder, be
       break;
 
     case WORLD_BOOK_ANCHORS.HEADER: {
+      if (typeof contentHolder.value !== 'string') {
+        resultInfo.status = DRY_RUN_STATUS.FALLBACK;
+        resultInfo.anchor = WORLD_BOOK_ANCHORS.AFTER;
+        resultInfo.reason = 'non-string content holder for HEADER, falling back to AFTER';
+        afterMessages.push(message);
+        preview = summarizePreviewPayload(message.content, WORLD_BOOK_ANCHORS.AFTER);
+        pushDryRunDispatch(group, 'header', message, { fallback: true });
+        break;
+      }
       contentHolder.value = normalizeWorldbookContent(`${payload}\n\n${contentHolder.value}`);
       const contextPreview = captureContextPreview(contentHolder.value, payload, { before: 80, after: 80 });
       preview = summarizePreviewPayload(contextPreview || payload, WORLD_BOOK_ANCHORS.HEADER);
@@ -98,6 +107,15 @@ export function applyWorldbookSegmentDispatch(group, segments, contentHolder, be
     }
 
     case WORLD_BOOK_ANCHORS.MEMORY: {
+      if (typeof contentHolder.value !== 'string') {
+        resultInfo.status = DRY_RUN_STATUS.FALLBACK;
+        resultInfo.anchor = WORLD_BOOK_ANCHORS.AFTER;
+        resultInfo.reason = 'non-string content holder for MEMORY, falling back to AFTER';
+        afterMessages.push(message);
+        preview = summarizePreviewPayload(message.content, WORLD_BOOK_ANCHORS.AFTER);
+        pushDryRunDispatch(group, 'memory', message, { fallback: true });
+        break;
+      }
       contentHolder.value = normalizeWorldbookContent(`${contentHolder.value}\n\n${payload}`);
       const contextPreview = captureContextPreview(contentHolder.value, payload, { before: 80, after: 80 });
       preview = summarizePreviewPayload(contextPreview || payload, WORLD_BOOK_ANCHORS.MEMORY);
@@ -106,6 +124,16 @@ export function applyWorldbookSegmentDispatch(group, segments, contentHolder, be
     }
 
     case WORLD_BOOK_ANCHORS.CUSTOM: {
+      if (typeof contentHolder.value !== 'string') {
+        resultInfo.status = DRY_RUN_STATUS.FALLBACK;
+        resultInfo.anchor = WORLD_BOOK_ANCHORS.AFTER;
+        resultInfo.reason = 'non-string content holder for CUSTOM, falling back to AFTER';
+        afterMessages.push(message);
+        preview = summarizePreviewPayload(message.content, WORLD_BOOK_ANCHORS.AFTER);
+        pushDryRunDispatch(group, 'custom', message, { fallback: true });
+        break;
+      }
+
       const key = (group?.target?.customKey || '').trim();
       if (key) {
         const anchorIndex = contentHolder.value.indexOf(key);
@@ -158,7 +186,35 @@ export function applyWorldbookSegmentDispatch(group, segments, contentHolder, be
 export function dispatchWorldbookSegments(config, mergedAssistantMessage) {
   const result = { before: [], after: [] };
   const groups = config?.worldbook?.groups;
-  if (!Array.isArray(groups) || !groups.length || !mergedAssistantMessage?.content) {
+  if (!Array.isArray(groups) || !groups.length) {
+    return result;
+  }
+
+  // 非字符串合并结果：不做字符串替换，仅标记为 FALLBACK，保持上下文纯净
+  if (typeof mergedAssistantMessage?.content !== 'string') {
+    warnWorldbookIssue('non-string merged content; skip string-based worldbook dispatch', {
+      groups: Array.isArray(groups) ? groups.length : 0,
+    });
+
+    for (const group of groups) {
+      if (!group || typeof group !== 'object') continue;
+      const defaultAnchor = group?.target?.anchor || WORLD_BOOK_ANCHORS.AFTER;
+      const role = group?.target?.role || WORLD_BOOK_DEFAULT_ROLE;
+      const matchedEntryKeys = collectGroupMatchedEntries(group);
+
+      matchedEntryKeys.forEach((entryKey) =>
+        updateDryRunEntryStatus(group, entryKey, DRY_RUN_STATUS.FALLBACK, {
+          anchor: defaultAnchor,
+          role: role,
+          reason: 'non-string merged content, skipping string replacement',
+          preview: null,
+        }),
+      );
+
+      group.sentinel = group.sentinel || {};
+      group.sentinel.opened = false;
+    }
+
     return result;
   }
 

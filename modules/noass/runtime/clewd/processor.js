@@ -146,11 +146,15 @@ export function process(prefixs, messages, options = {}) {
 
     for (const message of messages) {
       if (message && message.content) {
-        const role = message.role || 'user';
+        // 归一化角色：未知角色（如 'model'）归到 assistant，避免被错误按 user 前缀处理
+        let role = message.role || 'user';
+        if (!['user', 'assistant', 'system'].includes(role)) {
+          role = 'assistant';
+        }
         const name = message.name;
         const prefixLookup = prefixs[name] || prefixs[role] || role;
         const prefix = `\n\n${prefixLookup}${name ? `: ${name}` : ''}: `;
-        prompt += prefix + message.content.trim();
+        prompt += prefix + (typeof message.content === 'string' ? message.content.trim() : String(message.content).trim());
       } else {
         console.warn('[ST-Diff][noass] 跳过无效消息对象:', message);
       }
