@@ -7,6 +7,7 @@ const MACROS_DOC_URL = '/scripts/extensions/third-party/ST-Diff/macros.md';
 const TAB_LABELS = {
     [MACRO_KEYS.ROULETTE]: 'Roulette宏',
     [MACRO_KEYS.CASCADE]: 'Cascade宏',
+    [MACRO_KEYS.FLOW]: 'Flow宏',
 };
 
 const ACTION_LABELS = {
@@ -19,6 +20,7 @@ const ACTION_LABELS = {
 const toolbarHandlers = {
     [MACRO_KEYS.ROULETTE]: createHandlerSet(),
     [MACRO_KEYS.CASCADE]: createHandlerSet(),
+    [MACRO_KEYS.FLOW]: createHandlerSet(),
 };
 
 const TOOLBAR_GLOBAL_NS = '.stdiffMacrosToolbarGlobals';
@@ -42,7 +44,7 @@ export function triggerToolbarGlobalsSync() {
 
 /**
  * 注册工具栏操作处理器。
- * @param {'roulette'|'cascade'} tab
+ * @param {'roulette'|'cascade'|'flow'} tab
  * @param {Partial<ToolbarHandlerSet>} handlers
  * @returns {() => void} 取消注册函数
  */
@@ -113,7 +115,7 @@ export function renderToolbar(ctx, state, context) {
             const action = $(event.currentTarget).data('action');
             if (!action) return;
 
-            // 全局导入/导出：一个文件同时包含两个宏及其所有组
+            // 全局导入/导出：一个文件同时包含三个宏及其所有组
             if (action === 'exportData') {
                 try {
                     exportAllMacrosFile(ctx, state);
@@ -172,7 +174,7 @@ export function renderToolbar(ctx, state, context) {
 
         const enabled = state?.enabled === true;
         Object.entries(buttons).forEach(([action, $button]) => {
-            // import/export 改为“全量（两个宏+所有组）”的文件读写，不再依赖面板handler
+            // import/export 改为“全量（三个宏+所有组）”的文件读写，不再依赖面板 handler
             const isGlobalAction = action === 'importData' || action === 'exportData';
             const hasHandler = isGlobalAction ? true : typeof handlers[action] === 'function';
             const disabled = !hasHandler || !enabled;
@@ -708,18 +710,59 @@ function createToolbarButton(iconClass, label, action, options = {}) {
 }
 
 export function notify(ctx, message, type = 'info') {
-    const notifier = ctx?.ui?.notify ?? window?.stdiffNotify ?? window?.notify;
+    const normalizedType = type === 'warn' ? 'warning' : type;
+
+    const uiNotify = ctx?.ui?.notify;
+    if (typeof uiNotify === 'function') {
+        const prefersTriplet = uiNotify.length >= 3;
+        try {
+            if (prefersTriplet) {
+                uiNotify(normalizedType, message, 'ST-Diff');
+            } else {
+                uiNotify(message, normalizedType);
+            }
+            return;
+        } catch {}
+
+        // 兜底：尝试另一种调用签名
+        try {
+            uiNotify(message, normalizedType);
+            return;
+        } catch {}
+        try {
+            uiNotify(normalizedType, message, 'ST-Diff');
+            return;
+        } catch {}
+    }
+
+    const notifier = window?.stdiffNotify ?? window?.notify;
     if (typeof notifier === 'function') {
-        notifier(message, type);
+        const prefersTriplet = notifier.length >= 3;
+        try {
+            if (prefersTriplet) {
+                notifier(normalizedType, message, 'ST-Diff');
+            } else {
+                notifier(message, normalizedType);
+            }
+            return;
+        } catch {}
+
+        try {
+            notifier(message, normalizedType);
+            return;
+        } catch {}
+        try {
+            notifier(normalizedType, message, 'ST-Diff');
+            return;
+        } catch {}
+    }
+
+    if (window?.toastr && typeof window.toastr[normalizedType] === 'function') {
+        window.toastr[normalizedType](message);
         return;
     }
 
-    if (window?.toastr && typeof window.toastr[type] === 'function') {
-        window.toastr[type](message);
-        return;
-    }
-
-    if (type === 'error') {
+    if (normalizedType === 'error') {
         console.error(TAG, message);
     } else {
         console.log(TAG, message);
@@ -730,15 +773,15 @@ export function notify(ctx, message, type = 'info') {
  * 打开宏文档弹窗：加载 ST-Diff/macros.md，使用酒馆 markdown渲染（showdown + DOMPurify）转换为html，
  * 然后通过callGenericPopup展示。若缺少 md 渲染，则回退为纯文本显示
  *
- * 运行时直接从扩展目录读取 md，并使用酒馆全局的 showdown 管线进行渲染。
- * 若任一依赖缺失（showdown / DOMPurify / callGenericPopup），则不抛出到调用侧  而是回退为纯文本弹窗
+ * 运行时直接从扩展目录读取 md，并使用酒馆全局的 showdown 管线进行渲染
+ * 若任一依赖缺失（showdown / DOMPurify / callGenericPopup），则不抛出到调用侧 ，转为回退纯文本弹窗
  *
  * @param {ReturnType<typeof import('../../../index.js')['getCtx']>} ctx
- * @param {'roulette'|'cascade'} [tab] 当前激活的标签，用于在弹窗中滚动到对应小节
+ * @param {'roulette'|'cascade'|'flow'} [tab] 当前激活的标签，用于在弹窗中滚动到对应小节
  */
 export async function openMacrosDocs(ctx, tab) {
     try {
-        // 优先方案（更新）：若模板目录存在 Markdown 且宿主具备 showdown，则优先用 Markdown 渲染，便于测试/本地化
+        // 优先方案：若模板目录存在 Markdown 且宿主具备 showdown，则优先用markdown渲染
         try {
             const tmplMdResHead = await fetch('/scripts/extensions/third-party/ST-Diff/presentation/templates/macros-docs.md', { cache: 'no-cache' });
             if (tmplMdResHead?.ok) {
@@ -948,13 +991,15 @@ function resolvePopupType(ctx) {
 /**
  * 创建文档弹窗的onOpen回调，在弹出后滚动到对应小节
  *
- * @param {'roulette'|'cascade'} [tab]
+ * @param {'roulette'|'cascade'|'flow'} [tab]
  * @returns {(popup:any) => void}
  */
 function createDocsOnOpenHandler(tab) {
     const targetId = tab === MACRO_KEYS.CASCADE
         ? 'stdiff-doc-cascade'
-        : 'stdiff-doc-roulette';
+        : tab === MACRO_KEYS.FLOW
+            ? 'stdiff-doc-flow'
+            : 'stdiff-doc-roulette';
 
     return (popup) => {
         try {
@@ -987,7 +1032,7 @@ function escapeHtml(text) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 全量导入/导出：两个宏 + 全部组                                                 */
+/* 全量导入/导出：三个宏 + 全部组                                                 */
 /* -------------------------------------------------------------------------- */
 
 function stripGroupRuntimeFields(group) {
@@ -1001,6 +1046,7 @@ function stripGroupRuntimeFields(group) {
 function buildFullMacrosSnapshot(state) {
     const rouletteGroups = Object.values(state?.roulette?.groups || {}).map(stripGroupRuntimeFields);
     const cascadeGroups = Object.values(state?.cascade?.groups || {}).map(stripGroupRuntimeFields);
+    const flowGroups = Object.values(state?.flow?.groups || {}).map(stripGroupRuntimeFields);
     return {
         version: Number.isFinite(state?.version) ? state.version : 1,
         enabled: state?.enabled !== false,
@@ -1014,6 +1060,11 @@ function buildFullMacrosSnapshot(state) {
             enabled: state?.cascade?.enabled !== false,
             activeGroupId: state?.cascade?.activeGroupId || (cascadeGroups[0]?.id || ''),
             groups: cascadeGroups,
+        },
+        flow: {
+            enabled: state?.flow?.enabled !== false,
+            activeGroupId: state?.flow?.activeGroupId || (flowGroups[0]?.id || ''),
+            groups: flowGroups,
         },
     };
 }
@@ -1092,6 +1143,19 @@ function importAllMacrosFile(ctx, state, onDone) {
                     }
                 }
 
+                // Flow
+                if (root.flow && typeof root.flow === 'object') {
+                    if (Array.isArray(root.flow.groups)) {
+                        importModule(ctx, state, MACRO_KEYS.FLOW, { groups: root.flow.groups });
+                    }
+                    if (typeof root.flow.enabled === 'boolean') {
+                        state.flow.enabled = root.flow.enabled;
+                    }
+                    if (typeof root.flow.activeGroupId === 'string' && root.flow.activeGroupId) {
+                        state.flow.activeGroupId = root.flow.activeGroupId;
+                    }
+                }
+
                 // 持久化
                 try { saveMacrosState(ctx); } catch {}
                 notify(ctx, '宏模块全量配置导入完成。', 'success');
@@ -1123,7 +1187,7 @@ function importAllMacrosFile(ctx, state, onDone) {
  * @typedef {Object} ToolbarActionPayload
  * @property {any} ctx
  * @property {import('../../state/manager.js').MacrosState} state
- * @property {'roulette'|'cascade'} tab
+ * @property {'roulette'|'cascade'|'flow'} tab
  * @property {() => void} requestSave
  * @property {(tab:string, options?:{save?:boolean}) => void} switchTab
  * @property {JQuery.Event} [event]

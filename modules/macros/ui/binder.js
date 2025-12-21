@@ -45,6 +45,7 @@ export function unbindUI() {
  * @property {(ctx: any) => void} saveState
  * @property {(ctx: any, state: import('../state/manager.js').MacrosState, elements: MacroPaneContext) => (void|(() => void))} renderRoulettePanel
  * @property {(ctx: any, state: import('../state/manager.js').MacrosState, elements: MacroPaneContext) => (void|(() => void))} renderCascadePanel
+ * @property {(ctx: any, state: import('../state/manager.js').MacrosState, elements: MacroPaneContext) => (void|(() => void))} renderFlowPanel
  * @property {(ctx: any, state: import('../state/manager.js').MacrosState, elements: MacroToolbarContext) => (void|(() => void))} renderToolbar
  */
 
@@ -53,12 +54,14 @@ export function unbindUI() {
  * @property {JQuery} $container
  * @property {() => void} requestSave
  * @property {() => void} requestRefresh
+ * @property {() => void} requestReRegister
  */
 
 /**
  * @typedef {Object} MacroToolbarContext
  * @property {JQuery} $container
  * @property {() => void} requestSave
+ * @property {() => void} requestReRegister
  * @property {(tab: string, options?: { save?: boolean }) => void} switchTab
  * @property {() => string} getActiveTab
  */
@@ -98,6 +101,7 @@ class MacroBinder {
       saveState: rawDeps?.saveState ?? saveMacrosState,
       renderRoulettePanel: rawDeps?.renderRoulettePanel ?? null,
       renderCascadePanel: rawDeps?.renderCascadePanel ?? null,
+      renderFlowPanel: rawDeps?.renderFlowPanel ?? null,
       renderToolbar: rawDeps?.renderToolbar ?? null,
       // 运行时钩子（启用/禁用时注册/注销宏）
       registerMacros: typeof rawDeps?.registerMacros === 'function' ? rawDeps.registerMacros : null,
@@ -236,6 +240,7 @@ class MacroBinder {
     const renderResult = this.deps.renderToolbar(this.ctx, this.state, {
       $container: this.$toolbar,
       requestSave: () => this.saveState(),
+      requestReRegister: () => this.reRegisterMacros(),
       switchTab: (tab, options) => this.applyActiveTab({ tab, save: options?.save ?? true }),
       getActiveTab: () => this.state.ui.activeTab,
     });
@@ -318,6 +323,7 @@ class MacroBinder {
       $container: $pane,
       requestSave: () => this.saveState(),
       requestRefresh: () => this.renderActivePane(),
+      requestReRegister: () => this.reRegisterMacros(),
     });
 
     if (typeof cleanup === 'function') {
@@ -336,6 +342,9 @@ class MacroBinder {
     }
     if (tab === MACRO_KEYS.CASCADE) {
       return this.deps.renderCascadePanel;
+    }
+    if (tab === MACRO_KEYS.FLOW) {
+      return this.deps.renderFlowPanel;
     }
     return null;
   }
@@ -384,6 +393,38 @@ class MacroBinder {
       console.warn('[ST-Diff][macros] 保存状态失败', error);
       try {
         notify(this.ctx, '保存设置失败，请查看控制台日志。', 'error');
+      } catch {}
+    }
+  }
+
+  /**
+   * 重新注册键式宏：用于“新增/删除/重命名宏组”后热更新键表。
+   * 通过 “先注销 OWNED_KEYS 再重新注册” 确保不会遗留已删除的键。
+   */
+  reRegisterMacros() {
+    if (this.state?.enabled !== true) {
+      return;
+    }
+
+    if (typeof this.deps.unregisterMacros !== 'function' || typeof this.deps.registerMacros !== 'function') {
+      return;
+    }
+
+    try {
+      this.deps.unregisterMacros();
+    } catch (error) {
+      console.warn('[ST-Diff][macros] 重新注销宏失败', error);
+    }
+
+    try {
+      this.deps.registerMacros();
+    } catch (error) {
+      console.warn('[ST-Diff][macros] 重新注册宏失败', error);
+    }
+
+    if (this.toolbarController && typeof this.toolbarController.updateActiveTab === 'function') {
+      try {
+        this.toolbarController.updateActiveTab(this.state.ui.activeTab);
       } catch {}
     }
   }

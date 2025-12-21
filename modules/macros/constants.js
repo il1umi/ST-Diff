@@ -8,11 +8,13 @@ export const MODULE_NAMESPACE = 'macros';
 export const MACRO_KEYS = Object.freeze({
   ROULETTE: 'roulette',
   CASCADE: 'cascade',
+  FLOW: 'flow',
 });
 
 export const DEFAULT_GROUP_IDS = Object.freeze({
   ROULETTE: 'defaultRoulette',
   CASCADE: 'defaultCascade',
+  FLOW: 'defaultFlow',
 });
 
 export const MAX_MACRO_DEPTH = 16;
@@ -25,6 +27,13 @@ export const CASCADE_DEFAULTS = Object.freeze({
   PREFIX: '', // 每行前缀；非空时将在行首添加“<PREFIX><index>：”
 });
 
+export const FLOW_DEFAULTS = Object.freeze({
+  RANGE: { min: 1, max: 1 },
+  JOINER: '',
+  PREVENT_REPEAT: false,
+  MAX_OUTPUT: 100, // 安全上限：最大展开元素数量
+});
+
 export const UI_SELECTORS = Object.freeze({
   ROOT_SECTION: '[data-stdiff-section="macros"]',
   TABS: '[data-macros-tabs]',
@@ -32,6 +41,7 @@ export const UI_SELECTORS = Object.freeze({
   TOOLBAR: '[data-macros-actions]',
   ROULETTE_PANE: '[data-pane="roulette"]',
   CASCADE_PANE: '[data-pane="cascade"]',
+  FLOW_PANE: '[data-pane="flow"]',
   PREVIEW: '[data-macros-preview]',
   ENABLE_TOGGLE: '#stdiff-macros-enabled',
   ROOT_BODY: '#stdiff-macros-body',
@@ -41,4 +51,5 @@ export const STORAGE_KEYS = Object.freeze({
   STATE_VERSION: 'version',
   ROULETTE: 'roulette',
   CASCADE: 'cascade',
+  FLOW: 'flow',
 });

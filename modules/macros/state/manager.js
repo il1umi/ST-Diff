@@ -8,14 +8,17 @@ import {
   DEFAULT_GROUP_IDS,
   STORAGE_KEYS,
   CASCADE_DEFAULTS,
+  FLOW_DEFAULTS,
   MAX_MACRO_DEPTH,
 } from '../constants.js';
 import {
   createDefaultMacrosState,
   createDefaultRouletteGroup,
   createDefaultCascadeGroup,
+  createDefaultFlowGroup,
   createDefaultRouletteEntry,
   createDefaultCascadeOption,
+  createDefaultFlowItem,
   createMetadata,
   DEFAULT_STATE_VERSION,
 } from './defaults.js';
@@ -36,6 +39,7 @@ import {
 const STATE_LOG_TAG = '[ST-Diff][macros:state]';
 const ROULETTE_REF_REGEX = /\{\{\s*roulette_([a-zA-Z][\w-]{2,31})\s*\}\}/g;
 const CASCADE_REF_REGEX = /\{\{\s*cascade_([a-zA-Z][\w-]{2,31})\s*\}\}/g;
+const FLOW_REF_REGEX = /\{\{\s*flow_([a-zA-Z][\w-]{2,31})\s*\}\}/g;
 
 /**
  * 自定义错误类型，便于UI捕获并提示。
@@ -76,6 +80,7 @@ export function ensureMacrosState(ctx) {
   state.ui = normalizeUIState(state.ui);
   state.roulette = normalizeRouletteState(state.roulette);
   state.cascade = normalizeCascadeState(state.cascade);
+  state.flow = normalizeFlowState(state.flow);
 
   return state;
 }
@@ -100,7 +105,19 @@ export function saveMacrosState(ctx) {
     try {
       const notifier = ctx?.ui?.notify ?? window?.stdiffNotify ?? window?.notify;
       if (typeof notifier === 'function') {
-        notifier('保存设置失败，请查看控制台日志。', 'error');
+        const type = 'error';
+        const prefersTriplet = notifier.length >= 3;
+
+        try {
+          if (prefersTriplet) {
+            notifier(type, '保存设置失败，请查看控制台日志。', 'ST-Diff');
+          } else {
+            notifier('保存设置失败，请查看控制台日志。', type);
+          }
+        } catch {
+          try { notifier('保存设置失败，请查看控制台日志。', type); } catch {}
+          try { notifier(type, '保存设置失败，请查看控制台日志。', 'ST-Diff'); } catch {}
+        }
       }
     } catch {}
   }
@@ -119,6 +136,9 @@ export function getGroup(state, type, id) {
   }
   if (type === MACRO_KEYS.CASCADE) {
     return state?.cascade?.groups?.[id] || null;
+  }
+  if (type === MACRO_KEYS.FLOW) {
+    return state?.flow?.groups?.[id] || null;
   }
   return null;
 }
@@ -165,6 +185,16 @@ export function setGroup(ctx, state, type, payload) {
       totalGroups: Object.keys(state.cascade.groups).length,
       activeGroupId: state.cascade.activeGroupId,
     });
+  } else if (type === MACRO_KEYS.FLOW) {
+    const normalized = normalizeFlowGroup(payload, state);
+    state.flow.groups[normalized.id] = normalized;
+    ensureActiveGroup(state.flow, normalized.id);
+    touchMetadata(state.flow.metadata);
+    console.debug(STATE_LOG_TAG, 'flow group persisted', {
+      normalizedId: normalized.id,
+      totalGroups: Object.keys(state.flow.groups).length,
+      activeGroupId: state.flow.activeGroupId,
+    });
   } else {
     throw new MacroStateError(`未知的宏类型：${type}`);
   }
@@ -188,7 +218,19 @@ export function setGroup(ctx, state, type, payload) {
  * @param {string} id
  */
 export function deleteGroup(ctx, state, type, id) {
-  const container = type === MACRO_KEYS.ROULETTE ? state?.roulette : state?.cascade;
+  const container =
+    type === MACRO_KEYS.ROULETTE
+      ? state?.roulette
+      : type === MACRO_KEYS.CASCADE
+        ? state?.cascade
+        : type === MACRO_KEYS.FLOW
+          ? state?.flow
+          : null;
+
+  if (!container) {
+    throw new MacroStateError(`未知的宏类型：${type}`);
+  }
+
   if (!container?.groups?.[id]) {
     throw new MacroStateError(`宏组 ${id} 不存在`);
   }
@@ -218,7 +260,18 @@ export function deleteGroup(ctx, state, type, id) {
  * @param {string} newId
  */
 export function renameGroup(ctx, state, type, oldId, newId) {
-  const container = type === MACRO_KEYS.ROULETTE ? state?.roulette : state?.cascade;
+  const container =
+    type === MACRO_KEYS.ROULETTE
+      ? state?.roulette
+      : type === MACRO_KEYS.CASCADE
+        ? state?.cascade
+        : type === MACRO_KEYS.FLOW
+          ? state?.flow
+          : null;
+
+  if (!container) {
+    throw new MacroStateError(`未知的宏类型：${type}`);
+  }
 
   if (!container?.groups?.[oldId]) {
     throw new MacroStateError(`待重命名的宏组 ${oldId} 不存在`);
@@ -259,6 +312,7 @@ export function renameGroup(ctx, state, type, oldId, newId) {
   // 重新校验有向图，避免出现循环或悬挂引用
   verifyRouletteGraph(state.roulette.groups);
   verifyCascadeGraph(state.cascade.groups);
+  verifyFlowGraph(state.flow.groups);
 
   // 元数据触碰与持久化
   touchMetadata(container.metadata);
@@ -296,6 +350,8 @@ function updateReferencesForRename(state, type, oldId, newId) {
     kinds.push('roulette');
   } else if (type === MACRO_KEYS.CASCADE) {
     kinds.push('cascade');
+  } else if (type === MACRO_KEYS.FLOW) {
+    kinds.push('flow');
   } else {
     return;
   }
@@ -320,6 +376,20 @@ function updateReferencesForRename(state, type, oldId, newId) {
       if (!Array.isArray(g.options)) continue;
       g.options = g.options.map((opt) => {
         const next = { ...opt };
+        kinds.forEach((k) => {
+          next.value = replaceRefsInText(next.value, k, oldId, newId);
+        });
+        return next;
+      });
+    }
+  }
+
+  // 遍历 flow 组的 items
+  if (state?.flow?.groups) {
+    for (const g of Object.values(state.flow.groups)) {
+      if (!Array.isArray(g.items)) continue;
+      g.items = g.items.map((item) => {
+        const next = { ...item };
         kinds.forEach((k) => {
           next.value = replaceRefsInText(next.value, k, oldId, newId);
         });
@@ -352,6 +422,14 @@ export function exportModule(state, type) {
     };
   }
 
+  if (type === MACRO_KEYS.FLOW) {
+    return {
+      version: state.version,
+      type,
+      groups: Object.values(state.flow.groups).map(stripRuntimeFields),
+    };
+  }
+
   throw new MacroStateError(`未知的宏类型：${type}`);
 }
 
@@ -381,12 +459,18 @@ export function importModule(ctx, state, type, payload) {
     throw new MacroStateError('导入数据未包含任何宏组');
   }
 
-  const snapshot = type === MACRO_KEYS.ROULETTE ? {} : {};
+  const snapshot = {};
   for (const group of groups) {
-    const normalized =
-      type === MACRO_KEYS.ROULETTE
-        ? normalizeRouletteGroup(group, state, { overwriteMetadata: true })
-        : normalizeCascadeGroup(group, state, { overwriteMetadata: true });
+    let normalized;
+    if (type === MACRO_KEYS.ROULETTE) {
+      normalized = normalizeRouletteGroup(group, state, { overwriteMetadata: true });
+    } else if (type === MACRO_KEYS.CASCADE) {
+      normalized = normalizeCascadeGroup(group, state, { overwriteMetadata: true });
+    } else if (type === MACRO_KEYS.FLOW) {
+      normalized = normalizeFlowGroup(group, state, { overwriteMetadata: true });
+    } else {
+      throw new MacroStateError(`未知的宏类型：${type}`);
+    }
     snapshot[normalized.id] = normalized;
   }
 
@@ -394,10 +478,14 @@ export function importModule(ctx, state, type, payload) {
     state.roulette.groups = snapshot;
     ensureActiveGroup(state.roulette, Object.keys(snapshot)[0]);
     touchMetadata(state.roulette.metadata);
-  } else {
+  } else if (type === MACRO_KEYS.CASCADE) {
     state.cascade.groups = snapshot;
     ensureActiveGroup(state.cascade, Object.keys(snapshot)[0]);
     touchMetadata(state.cascade.metadata);
+  } else if (type === MACRO_KEYS.FLOW) {
+    state.flow.groups = snapshot;
+    ensureActiveGroup(state.flow, Object.keys(snapshot)[0]);
+    touchMetadata(state.flow.metadata);
   }
 
   state.version = DEFAULT_STATE_VERSION;
@@ -456,6 +544,24 @@ function normalizeCascadeState(state) {
   normalized.groups = groups;
   ensureActiveGroup(normalized, normalized.activeGroupId || Object.keys(groups)[0]);
   verifyCascadeGraph(groups);
+
+  return normalized;
+}
+
+function normalizeFlowState(state) {
+  const normalized = typeof state === 'object' && state !== null ? { ...state } : {};
+  normalized.enabled = normalized.enabled !== false;
+  normalized.metadata = ensureMetadata(normalized.metadata);
+
+  const groups = normalizeGroupMap(
+    normalized.groups,
+    () => createDefaultFlowGroup(),
+    (group) => normalizeFlowGroup(group, normalized),
+  );
+
+  normalized.groups = groups;
+  ensureActiveGroup(normalized, normalized.activeGroupId || Object.keys(groups)[0]);
+  verifyFlowGraph(groups);
 
   return normalized;
 }
@@ -570,6 +676,50 @@ function normalizeCascadeGroup(group, state, options = {}) {
   return normalized;
 }
 
+function normalizeFlowGroup(group, state, options = {}) {
+  const now = Date.now();
+  const id = typeof group?.id === 'string' ? group.id : group?.identifier;
+
+  const validation = validateGroupId(id || '');
+  if (!validation.ok) {
+    throw new MacroStateError(validation.message || '宏组 ID 非法', { group });
+  }
+
+  const normalized = {
+    id: id.trim(),
+    label: typeof group?.label === 'string' && group.label.trim() ? group.label.trim() : `flow 宏 ${id}`,
+    description: typeof group?.description === 'string' ? group.description : '',
+    joiner: typeof group?.joiner === 'string' ? group.joiner : FLOW_DEFAULTS.JOINER,
+    preventRepeat: group?.preventRepeat === true,
+    range: { ...FLOW_DEFAULTS.RANGE },
+    items: [],
+    metadata: ensureMetadata(options.overwriteMetadata ? group?.metadata : createMetadata(now)),
+  };
+
+  const rangeValidation = validateRange(group?.range || {});
+  normalized.range = rangeValidation.value;
+  if (!rangeValidation.ok) {
+    throw new MacroStateError(rangeValidation.message || '范围非法', { group });
+  }
+
+  const itemsList = Array.isArray(group?.items) ? group.items : [];
+
+  if (!itemsList.length) {
+    itemsList.push(createDefaultFlowItem());
+  }
+
+  normalized.items = itemsList.map((item) => normalizeFlowItem(item));
+  ensureUniqueEntryIds(normalized.items, 'Flow宏条目');
+
+  const activeState = state?.flow || {};
+  if (activeState.groups && activeState.groups[normalized.id]) {
+    normalized.metadata.createdAt = activeState.groups[normalized.id].metadata?.createdAt || normalized.metadata.createdAt;
+  }
+  touchMetadata(normalized.metadata, now);
+
+  return normalized;
+}
+
 function normalizeRouletteEntry(entry) {
   const now = Date.now();
   const id =
@@ -610,6 +760,28 @@ function normalizeCascadeOption(option) {
     weight: weightValidation.value,
     enabled: option?.enabled !== false,
     metadata: ensureMetadata(option?.metadata, now),
+  };
+}
+
+function normalizeFlowItem(item) {
+  const now = Date.now();
+  const id =
+    typeof item?.id === 'string' && item.id.trim()
+      ? item.id.trim()
+      : generateId('flow-item');
+
+  const weightValidation = validateWeight(item?.weight, { min: 0 });
+  if (!weightValidation.ok && weightValidation.message) {
+    console.warn('[ST-Diff][macros] 权重自动纠正：', weightValidation.message);
+  }
+
+  return {
+    id,
+    label: typeof item?.label === 'string' && item.label.trim() ? item.label.trim() : item?.value || '未命名条目',
+    value: typeof item?.value === 'string' ? item.value : String(item?.value ?? ''),
+    weight: weightValidation.value,
+    enabled: item?.enabled !== false,
+    metadata: ensureMetadata(item?.metadata, now),
   };
 }
 
@@ -712,6 +884,25 @@ function verifyCascadeGraph(groups) {
   }
 }
 
+function verifyFlowGraph(groups) {
+  const adjacency = {};
+  for (const [id, group] of Object.entries(groups)) {
+    adjacency[id] = [];
+    const items = Array.isArray(group.items) ? group.items : [];
+    for (const item of items) {
+      let match;
+      while ((match = FLOW_REF_REGEX.exec(item.value))) {
+        adjacency[id].push(match[1]);
+      }
+    }
+  }
+
+  const cycle = detectCycle(adjacency);
+  if (!cycle.ok) {
+    throw new MacroStateError(cycle.message || '检测到宏组循环引用', cycle);
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                   Types                                    */
 /* -------------------------------------------------------------------------- */
@@ -720,5 +911,6 @@ function verifyCascadeGraph(groups) {
  * @typedef {ReturnType<typeof createDefaultMacrosState>} MacrosState
  * @typedef {ReturnType<typeof createDefaultRouletteGroup>} RouletteGroup
  * @typedef {ReturnType<typeof createDefaultCascadeGroup>} CascadeGroup
- * @typedef {{ version:number, type:'roulette'|'cascade', groups:Array<RouletteGroup|CascadeGroup> }} MacroExportPayload
+ * @typedef {ReturnType<typeof createDefaultFlowGroup>} FlowGroup
+ * @typedef {{ version:number, type:'roulette'|'cascade'|'flow', groups:Array<RouletteGroup|CascadeGroup|FlowGroup> }} MacroExportPayload
  */

@@ -1,6 +1,7 @@
 import { MACRO_KEYS } from '../constants.js';
 import { execute as executeRoulette, evaluateSync as evaluateRouletteSync } from './roulette.js';
 import { execute as executeCascade, evaluateSync as evaluateCascadeSync } from './cascade.js';
+import { execute as executeFlow, evaluateSync as evaluateFlowSync } from './flow.js';
 import { createEvaluator } from './evaluator.js';
 
 const TAG = '[ST-Diff][macros]';
@@ -81,6 +82,29 @@ export function registerMacros(ctx, stateBridge) {
         const handler = () => {
           try {
             return evaluateCascadeSync({
+              ctx,
+              state,
+              groupId,
+              fallback: `{{${macroKey}}}`,
+            });
+          } catch (error) {
+            console.warn(`${TAG} 运行宏 ${macroKey} 失败`, error);
+            return `{{${macroKey}}}`;
+          }
+        };
+
+        register(macroKey, handler);
+        OWNED_KEYS.add(macroKey);
+      }
+    }
+
+    // 逐组注册：{{flow_<id>}}
+    if (state.flow && state.flow.groups) {
+      for (const [groupId] of Object.entries(state.flow.groups)) {
+        const macroKey = `flow_${groupId}`;
+        const handler = () => {
+          try {
+            return evaluateFlowSync({
               ctx,
               state,
               groupId,

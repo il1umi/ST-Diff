@@ -27,16 +27,58 @@ function resolveNotifier(ctx, custom) {
   if (typeof custom === 'function') {
     return custom;
   }
-  if (ctx?.ui?.notify) {
+
+  const hostNotify = ctx?.ui?.notify ?? window?.stdiffNotify ?? window?.notify;
+  const normalizeType = (level) => (level === 'warn' ? 'warning' : level);
+
+  if (typeof hostNotify === 'function') {
     return (message, level = 'warn') => {
+      const type = normalizeType(level);
+
       try {
-        ctx.ui.notify(level, message, 'ST-Diff 宏');
+        //插件UI侧约定：notify(message, type)
+        hostNotify(message, type);
       } catch (error) {
-        console.warn(`${TAG} 通知调用失败`, error);
+        try {
+          // 兼容可能的notify(type, message, title)
+          hostNotify(type, message, 'ST-Diff 宏');
+        } catch (innerError) {
+          console.warn(`${TAG} 通知调用失败`, innerError);
+        }
       }
     };
   }
-  return (message) => console.warn(`${TAG} ${message}`);
+
+  const toastr = window?.toastr;
+  if (toastr) {
+    return (message, level = 'warn') => {
+      const type = normalizeType(level);
+
+      try {
+        if (typeof toastr[type] === 'function') {
+          toastr[type](message, 'ST-Diff 宏');
+          return;
+        }
+      } catch (error) {
+        console.warn(`${TAG} 通知调用失败`, error);
+        return;
+      }
+
+      if (type === 'error') {
+        console.error(`${TAG} ${message}`);
+      } else {
+        console.warn(`${TAG} ${message}`);
+      }
+    };
+  }
+
+  return (message, level = 'warn') => {
+    if (level === 'error') {
+      console.error(`${TAG} ${message}`);
+    } else {
+      console.warn(`${TAG} ${message}`);
+    }
+  };
 }
 
 /**
