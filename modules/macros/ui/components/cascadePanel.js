@@ -203,6 +203,31 @@ export function renderCascadePanel(ctx, state, context) {
         .val(group.prefix ?? '');
     $prefixRow.append($prefixLabel, $prefixInput);
 
+    // 前缀合并（默认开启）：当宏的元素以 “前缀:” / “前缀：” 开头时，自动去掉重复前缀
+    const $dedupeRow = $('<div class="stdiff-macros-form__row"></div>');
+    const $dedupeToggle = $('<label class="stdiff-macros-switch"></label>')
+        .append(
+            $('<input type="checkbox">')
+                .prop('checked', group.dedupePrefix !== false),
+        )
+        .append('<span>前缀去重</span>');
+    $dedupeRow.append($dedupeToggle);
+
+    // 对xml块内的宏进行连续编号：仅影响提示词，没法支持渲染
+    const $renumberRow = $('<div class="stdiff-macros-form__row stdiff-macros-form__row--split"></div>');
+    const $renumberToggle = $('<label class="stdiff-macros-switch"></label>')
+        .append(
+            $('<input type="checkbox">')
+                .prop('checked', state?.cascade?.renumber?.enabled !== false),
+        )
+        .append('<span>对xml块内的宏进行连续编号</span>');
+    const $renumberLabel = $('<label class="stdiff-macros-form__label stdiff-macros-form__label--inline">标签名</label>');
+    const $renumberInput = $('<input type="text" class="text_pole stdiff-macros-form__control stdiff-macros-form__control--compact">')
+        .attr('placeholder', 'framework')
+        .attr('maxlength', 64)
+        .val(state?.cascade?.renumber?.tagName ?? 'framework');
+    $renumberRow.append($renumberToggle, $renumberLabel, $renumberInput);
+
     const $optionsRow = $('<div class="stdiff-macros-form__row stdiff-macros-form__row--split"></div>');
     const $duplicateToggle = $('<label class="stdiff-macros-switch"></label>')
         .append(
@@ -236,7 +261,7 @@ export function renderCascadePanel(ctx, state, context) {
     const $previewHeader = $('<div class="stdiff-macros-preview__header"></div>').append('<strong>预览</strong>');
     const $preview = $('<div class="stdiff-macros__preview stdiff-macros__preview--idle">使用工具栏预览按钮查看示例输出。</div>');
 
-    $form.append($groupRow, $idRow, $nameRow, $descRow, $rangeRow, $joinRow, $prefixRow, $optionsRow);
+    $form.append($groupRow, $idRow, $nameRow, $descRow, $rangeRow, $joinRow, $prefixRow, $dedupeRow, $renumberRow, $optionsRow);
     $container.append($form, $listHeader, $list, $previewHeader, $preview);
     cleanupStack.push(() => {
         $form.remove();
@@ -299,8 +324,14 @@ export function renderCascadePanel(ctx, state, context) {
         $maxInput.val(group.range?.max ?? 0);
         $joinInput.val(group.joiner ?? '\n');
         $prefixInput.val(group.prefix ?? '');
+        $dedupeToggle.find('input').prop('checked', group.dedupePrefix !== false);
         $duplicateToggle.find('input').prop('checked', group.allowDuplicate !== false);
         $sortSelect.val(group.sortMode ?? 'none');
+
+        const renumberEnabled = state?.cascade?.renumber?.enabled !== false;
+        $renumberToggle.find('input').prop('checked', renumberEnabled);
+        $renumberInput.val(state?.cascade?.renumber?.tagName ?? 'framework');
+        $renumberInput.prop('disabled', !renumberEnabled);
 
         if (rebuildOptions) {
             renderOptionRows();
@@ -688,6 +719,48 @@ export function renderCascadePanel(ctx, state, context) {
             })
             .on(`input${prefixNs}`, () => clearFieldError($prefixInput));
         cleanupStack.push(() => $prefixInput.off(prefixNs));
+
+        const detachDedupeToggle = bindToggle($dedupeToggle.find('input'), {
+            onChange: (value) => {
+                commitGroup((draft) => {
+                    draft.dedupePrefix = value === true;
+                });
+            },
+        });
+        cleanupStack.push(detachDedupeToggle);
+
+        const renumberToggleDetach = bindToggle($renumberToggle.find('input'), {
+            onChange: (value) => {
+                state.cascade.renumber ||= {};
+                state.cascade.renumber.enabled = value === true;
+                saveMacrosState(ctx);
+                requestSave();
+
+                $renumberInput.prop('disabled', state.cascade.renumber.enabled !== true);
+            },
+        });
+        cleanupStack.push(renumberToggleDetach);
+
+        const renumberNs = '.stdiffMacrosCascadeRenumber';
+        const commitRenumberTag = () => {
+            const value = String($renumberInput.val() ?? '').trim() || 'framework';
+            state.cascade.renumber ||= {};
+            state.cascade.renumber.tagName = value;
+            saveMacrosState(ctx);
+            requestSave();
+            $renumberInput.val(value);
+        };
+        $renumberInput
+            .off(renumberNs)
+            .on(`blur${renumberNs}`, commitRenumberTag)
+            .on(`keydown${renumberNs}`, (e) => {
+                if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
+                    e.preventDefault();
+                    commitRenumberTag();
+                    e.currentTarget.blur();
+                }
+            });
+        cleanupStack.push(() => $renumberInput.off(renumberNs));
 
         const detachDuplicateToggle = bindToggle($duplicateToggle.find('input'), {
             onChange: (value) => {

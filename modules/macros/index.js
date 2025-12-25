@@ -1,5 +1,6 @@
 import { ensureMacrosState, saveMacrosState } from './state/manager.js';
 import { registerMacros, unregisterMacros } from './runtime/index.js';
+import { mountPromptPostProcessor } from './runtime/promptPostProcessor.js';
 import { mountMacrosUI, unmountMacrosUI } from './ui/index.js';
 
 /**
@@ -10,6 +11,8 @@ import { mountMacrosUI, unmountMacrosUI } from './ui/index.js';
 let currentState = null;
 /** @type {ReturnType<typeof import('../../index.js')['getCtx']>} */
 let currentCtx = null;
+/** @type {null | (() => void)} */
+let cleanupPromptPost = null;
 
 /**
  * 挂载宏模块：根据模块独立开关（macros.enabled）注册或注销宏，并挂载 UI。
@@ -34,6 +37,19 @@ export async function mount(ctx) {
     }
   } catch (error) {
     console.warn('[ST-Diff][macros] 注册/注销宏失败', error);
+  }
+
+  // 提示词后处理器（仅影响提示词，不影响聊天显示）
+  try {
+    if (typeof cleanupPromptPost === 'function') {
+      cleanupPromptPost();
+      cleanupPromptPost = null;
+    }
+    cleanupPromptPost = mountPromptPostProcessor(ctx, {
+      getState: () => currentState,
+    });
+  } catch (error) {
+    console.warn('[ST-Diff][macros] 提示词后处理器挂载失败', error);
   }
 
   // 挂载 UI（启用切换逻辑由 Binder 负责）
@@ -63,6 +79,16 @@ export async function unmount(ctx) {
     unregisterMacros(ctx ?? currentCtx);
   } catch (error) {
     console.warn('[ST-Diff][macros] 注销宏失败', error);
+  }
+
+  try {
+    if (typeof cleanupPromptPost === 'function') {
+      cleanupPromptPost();
+    }
+  } catch (error) {
+    console.warn('[ST-Diff][macros] 提示词后处理器卸载失败', error);
+  } finally {
+    cleanupPromptPost = null;
   }
 
   try {

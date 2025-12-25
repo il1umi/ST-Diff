@@ -64,6 +64,7 @@ export function createDefaultCascadeGroup(id = DEFAULT_GROUP_IDS.CASCADE) {
     range: { ...CASCADE_DEFAULTS.RANGE },
     joiner: CASCADE_DEFAULTS.JOINER,
     prefix: CASCADE_DEFAULTS.PREFIX,
+    dedupePrefix: true,
     allowDuplicate: CASCADE_DEFAULTS.ALLOW_DUPLICATE,
     sortMode: CASCADE_DEFAULTS.SORT_MODE,
     options: [
@@ -131,6 +132,10 @@ export function createDefaultMacrosState() {
     },
     cascade: {
       enabled: true,
+      renumber: {
+        enabled: true,
+        tagName: 'framework',
+      },
       activeGroupId: cascadeGroup.id,
       groups: {
         [cascadeGroup.id]: cascadeGroup,

@@ -157,6 +157,27 @@ function createNotifier(ctx) {
   };
 }
 
+function stripDuplicatePrefixToken(line, prefixToken) {
+  if (typeof line !== 'string' || !line) return line;
+  if (typeof prefixToken !== 'string' || !prefixToken.trim()) return line;
+
+  const leadingWhitespace = line.match(/^\s*/)?.[0] ?? '';
+  const body = line.slice(leadingWhitespace.length);
+
+  const asciiPrefix = `${prefixToken}:`;
+  const fullPrefix = `${prefixToken}：`;
+
+  if (!body.startsWith(asciiPrefix) && !body.startsWith(fullPrefix)) {
+    return line;
+  }
+
+  const rest = body
+    .slice(prefixToken.length + 1)
+    .replace(/^\s+/, '');
+
+  return leadingWhitespace + rest;
+}
+
 /**
  * 按配置执行 cascade 宏。
  * @param {{
@@ -193,6 +214,7 @@ export async function execute(payload) {
   let allowDuplicate = CASCADE_DEFAULTS.ALLOW_DUPLICATE;
   let sortMode = CASCADE_DEFAULTS.SORT_MODE;
   let prefix = CASCADE_DEFAULTS.PREFIX;
+  let dedupePrefix = true;
 
   if (typeof inlineArgs === 'string' && inlineArgs.trim()) {
     const parsed = parseInlineArgs(inlineArgs);
@@ -212,6 +234,7 @@ export async function execute(payload) {
     range = group.range ? { ...group.range } : { ...CASCADE_DEFAULTS.RANGE };
     joiner = typeof group.joiner === 'string' ? group.joiner : CASCADE_DEFAULTS.JOINER;
     prefix = typeof group.prefix === 'string' ? group.prefix : CASCADE_DEFAULTS.PREFIX;
+    dedupePrefix = group.dedupePrefix !== false;
     allowDuplicate = group.allowDuplicate !== false;
     sortMode = ['none', 'asc', 'desc'].includes(group.sortMode) ? group.sortMode : CASCADE_DEFAULTS.SORT_MODE;
   } else {
@@ -275,8 +298,12 @@ export async function execute(payload) {
   let finalList = results.filter((item) => typeof item === 'string');
   finalList = sortStrings(finalList, sortMode);
 
-  // 前缀+编号
+  // 前缀+编号（可选：去掉行首重复前缀）
   if (typeof prefix === 'string' && prefix.trim()) {
+    if (dedupePrefix === true) {
+      const token = prefix.trim();
+      finalList = finalList.map((line) => stripDuplicatePrefixToken(line, token));
+    }
     finalList = finalList.map((line, idx) => `${prefix}${idx + 1}：${line}`);
   }
   
@@ -354,6 +381,7 @@ export function evaluateSync(payload) {
   const range = group.range ? { ...group.range } : { ...CASCADE_DEFAULTS.RANGE };
   const joiner = typeof group.joiner === 'string' ? group.joiner : CASCADE_DEFAULTS.JOINER;
   const prefix = typeof group.prefix === 'string' ? group.prefix : CASCADE_DEFAULTS.PREFIX;
+  const dedupePrefix = group.dedupePrefix !== false;
   const allowDuplicate = group.allowDuplicate !== false;
   const sortMode = ['none', 'asc', 'desc'].includes(group.sortMode) ? group.sortMode : CASCADE_DEFAULTS.SORT_MODE;
 
@@ -404,6 +432,10 @@ export function evaluateSync(payload) {
   let finalList = results.filter((x) => typeof x === 'string');
   finalList = sortStrings(finalList, sortMode);
   if (typeof prefix === 'string' && prefix.trim()) {
+    if (dedupePrefix === true) {
+      const token = prefix.trim();
+      finalList = finalList.map((line) => stripDuplicatePrefixToken(line, token));
+    }
     finalList = finalList.map((line, idx) => `${prefix}${idx + 1}：${line}`);
   }
   return finalList.join(joiner);

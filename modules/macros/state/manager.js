@@ -534,6 +534,7 @@ function normalizeCascadeState(state) {
   const normalized = typeof state === 'object' && state !== null ? { ...state } : {};
   normalized.enabled = normalized.enabled !== false;
   normalized.metadata = ensureMetadata(normalized.metadata);
+  normalized.renumber = normalizeCascadeRenumber(normalized.renumber);
 
   const groups = normalizeGroupMap(
     normalized.groups,
@@ -546,6 +547,18 @@ function normalizeCascadeState(state) {
   verifyCascadeGraph(groups);
 
   return normalized;
+}
+
+function normalizeCascadeRenumber(renumber) {
+  const enabled = renumber?.enabled !== false;
+  const fallbackTag = 'framework';
+  const rawTag = typeof renumber?.tagName === 'string' ? renumber.tagName : fallbackTag;
+  const tagName = String(rawTag).trim() || fallbackTag;
+
+  return {
+    enabled,
+    tagName: tagName.slice(0, 64),
+  };
 }
 
 function normalizeFlowState(state) {
@@ -643,6 +656,7 @@ function normalizeCascadeGroup(group, state, options = {}) {
     description: typeof group?.description === 'string' ? group.description : '',
     joiner: typeof group?.joiner === 'string' ? group.joiner : CASCADE_DEFAULTS.JOINER,
     prefix: typeof group?.prefix === 'string' ? group.prefix : CASCADE_DEFAULTS.PREFIX,
+    dedupePrefix: group?.dedupePrefix !== false,
     allowDuplicate: group?.allowDuplicate !== false,
     sortMode: ['none', 'asc', 'desc'].includes(group?.sortMode) ? group.sortMode : CASCADE_DEFAULTS.SORT_MODE,
     range: { ...CASCADE_DEFAULTS.RANGE },
