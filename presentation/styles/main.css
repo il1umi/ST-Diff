@@ -7,6 +7,38 @@
 /* 通用按钮防酒馆自带样式导致按钮竖排 */
 #st-diff .menu_button { width: auto; white-space: nowrap; }
 
+/* 顶部标题栏 */
+#st-diff .stdiff-drawer-actions {
+  margin-left: auto;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#st-diff .stdiff-update-check {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#st-diff .stdiff-update-check i { pointer-events: none; }
+#st-diff .stdiff-update-check.is-update-available,
+#st-diff .stdiff-update-check.is-update-available i {
+  color: var(--progSuccessColor, #3fb950);
+}
+
+/* 更新弹窗 */
+.stdiff-update-popup { display: flex; flex-direction: column; gap: 10px; }
+.stdiff-update-popup__meta { font-size: 12px; opacity: 0.85; word-break: break-word; }
+.stdiff-update-popup__actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.stdiff-update-popup .menu_button { width: auto; white-space: nowrap; }
+
+#st-diff .stdiff-update-check:disabled { opacity: 0.7; cursor: wait; }
+.stdiff-update-download.is-disabled { opacity: 0.55; pointer-events: none; }
+.stdiff-update-download:disabled { opacity: 0.7; cursor: not-allowed; }
+
 /* 强制世界书对比按钮横向排列 */
 #stdiff-worldbook-panel .menu_button {
   width: auto;
