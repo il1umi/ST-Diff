@@ -4,6 +4,7 @@ import {
   cloneTemplate as cloneTemplateFromState,
   ensureTemplateDefaults as ensureTemplateDefaultsFromState,
   createDefaultRule as createDefaultRuleFromState,
+  createDefaultClewdTagTransferRule as createDefaultClewdTagTransferRuleFromState,
   createDefaultWorldbookGroup as createDefaultWorldbookGroupFromState,
   sanitizeWorldbookGroup as sanitizeWorldbookGroupFromState,
   sanitizeWorldbookGroups as sanitizeWorldbookGroupsFromState,
@@ -67,7 +68,7 @@ class NoassSettingsBinder {
     this.isUpdating = false;
     this.refreshStoredDataView = null;
     this.worldbookController = null;
-    this.sectionKeys = ['root', 'capture', 'worldbook', 'storage'];
+    this.sectionKeys = ['root', 'capture', 'clewd-transfer', 'worldbook', 'storage'];
   }
 
   withDefaults(rawDeps) {
@@ -77,6 +78,7 @@ class NoassSettingsBinder {
     deps.cloneTemplate ??= cloneTemplateFromState;
     deps.ensureTemplateDefaults ??= ensureTemplateDefaultsFromState;
     deps.createDefaultRule ??= createDefaultRuleFromState;
+    deps.createDefaultClewdTagTransferRule ??= createDefaultClewdTagTransferRuleFromState;
     deps.createDefaultWorldbookGroup ??= createDefaultWorldbookGroupFromState;
     deps.sanitizeWorldbookGroup ??= sanitizeWorldbookGroupFromState;
     deps.sanitizeWorldbookGroups ??= sanitizeWorldbookGroupsFromState;
@@ -205,6 +207,10 @@ class NoassSettingsBinder {
       $addRule: $root.find('#stdiff-noass-add-rule'),
       $saveRules: $root.find('#stdiff-noass-save-rules'),
 
+      $transferContainer: $root.find('#stdiff-noass-transfer-rules'),
+      $transferAdd: $root.find('#stdiff-noass-transfer-add'),
+      $transferSave: $root.find('#stdiff-noass-transfer-save'),
+
       $storageList: $root.find('#stdiff-noass-storage-list'),
       $storageRefresh: $root.find('#stdiff-noass-storage-refresh'),
       $storageClearAll: $root.find('#stdiff-noass-storage-clear'),
@@ -242,6 +248,8 @@ class NoassSettingsBinder {
       $captureEnabled,
       $addRule,
       $saveRules,
+      $transferAdd,
+      $transferSave,
       $storageRefresh,
       $storageClearAll,
     } = this.dom;
@@ -290,6 +298,21 @@ class NoassSettingsBinder {
     });
 
     $saveRules.off('click' + this.ns).on('click' + this.ns, () => {
+      this.saveDebounced();
+      this.toast('规则已保存', 'info');
+    });
+
+    $transferAdd.off('click' + this.ns).on('click' + this.ns, () => {
+      const template = this.getActiveTemplate();
+      template.clewd_tag_transfer_rules ||= [];
+      template.clewd_tag_transfer_rules.push(
+        this.deps.createDefaultClewdTagTransferRule(template.clewd_tag_transfer_rules.length),
+      );
+      this.renderClewdTagTransferRules(template.clewd_tag_transfer_rules);
+      this.saveDebounced();
+    });
+
+    $transferSave.off('click' + this.ns).on('click' + this.ns, () => {
       this.saveDebounced();
       this.toast('规则已保存', 'info');
     });
@@ -547,6 +570,7 @@ class NoassSettingsBinder {
     $captureEnabled.prop('checked', template.capture_enabled !== false);
 
     this.renderRules(template.capture_rules);
+    this.renderClewdTagTransferRules(template.clewd_tag_transfer_rules);
     this.renderStoredData(template);
     this.applyCollapsedSections(template);
 
@@ -625,6 +649,67 @@ class NoassSettingsBinder {
 
       $row.append($left).append($right);
       $rulesContainer.append($row);
+    });
+  }
+
+  renderClewdTagTransferRules(rules) {
+    const { $transferContainer } = this.dom;
+    if (!$transferContainer) return;
+
+    $transferContainer.empty();
+
+    const list = Array.isArray(rules) ? rules : [];
+    if (!list.length) {
+      $transferContainer.append('<div class="stdiff-noass-empty">暂无搬运规则</div>');
+      return;
+    }
+
+    list.forEach((rule, index) => {
+      const $row = $('<div class="stdiff-noass-rule-row"></div>');
+
+      const $enabled = $('<input type="checkbox" class="stdiff-noass-rule-enabled">')
+        .prop('checked', rule.enabled !== false)
+        .on('change' + this.ns, () => {
+          rule.enabled = $enabled.prop('checked');
+          this.saveDebounced();
+        });
+
+      const $delete = $('<button type="button" class="menu_button stdiff-noass-rule-delete">删除</button>')
+        .on('click' + this.ns, () => {
+          list.splice(index, 1);
+          this.renderClewdTagTransferRules(list);
+          this.saveDebounced();
+        });
+
+      const $left = $('<div class="stdiff-noass-rule-left"></div>')
+        .append($('<label class="checkbox_label"></label>').append($enabled).append(' 启用'))
+        .append($delete);
+
+      const $startTag = $('<input type="text" class="text_pole" spellcheck="false" placeholder="<A>">')
+        .val(rule.startTag || '')
+        .on('input' + this.ns, () => {
+          rule.startTag = $startTag.val();
+        });
+
+      const $endTag = $('<input type="text" class="text_pole" spellcheck="false" placeholder="</A>">')
+        .val(rule.endTag || '')
+        .on('input' + this.ns, () => {
+          rule.endTag = $endTag.val();
+        });
+
+      const $targetTag = $('<input type="text" class="text_pole" spellcheck="false" placeholder="__A_TARGET__">')
+        .val(rule.targetTag || '')
+        .on('input' + this.ns, () => {
+          rule.targetTag = $targetTag.val();
+        });
+
+      const $right = $('<div class="stdiff-noass-rule-right"></div>')
+        .append(this.createLabeledField('起始标签', $startTag))
+        .append(this.createLabeledField('结束标签', $endTag))
+        .append(this.createLabeledField('目标标签', $targetTag));
+
+      $row.append($left).append($right);
+      $transferContainer.append($row);
     });
   }
 

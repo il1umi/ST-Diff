@@ -2,6 +2,7 @@ import { NO_TRANS_TAG, WORLD_BOOK_SENTINEL_PREFIX } from './clewd/constants.js';
 import { defaultTemplate } from '../state/defaults.js';
 import { ensureTemplateDefaults, cloneTemplate } from '../state/state.js';
 import { process } from './clewd/processor.js';
+import { applyClewdTagTransferRules } from './clewd/tagTransfer.js';
 import { captureAndStoreData, replaceTagsWithStoredData } from './capture/capture.js';
 import { injectWorldbookSentinels, attachDryRunHelpers } from './wibridge/sentinel.js';
 import { dispatchWorldbookSegments, normalizeWorldbookContent } from './wibridge/dispatch.js';
@@ -267,6 +268,13 @@ export function processAndAddMergeBlock(template, config, blockToMerge, targetAr
   }
 
   const worldbookDispatch = dispatchWorldbookSegments(config, mergedAssistantMessage);
+
+  if (typeof mergedAssistantMessage?.content === 'string' && mergedAssistantMessage.content) {
+    mergedAssistantMessage.content = applyClewdTagTransferRules(
+      mergedAssistantMessage.content,
+      template?.clewd_tag_transfer_rules,
+    );
+  }
 
   if (mergedAssistantMessage?.content) {
     const beforeContent = mergedAssistantMessage.content;

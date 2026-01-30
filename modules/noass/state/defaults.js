@@ -48,6 +48,7 @@ export const defaultTemplate = {
   prefill_user: 'Continue the conversation.',
   capture_enabled: true,
   capture_rules: [],
+  clewd_tag_transfer_rules: [],
   stored_data: {},
   worldbook_groups: [],
   debug_worldbook: false,
@@ -63,6 +64,14 @@ export const defaultRule = {
   tag: '',
   updateMode: 'accumulate',
   range: '',
+};
+
+export const defaultClewdTagTransferRule = {
+  enabled: true,
+  label: '规则1',
+  startTag: '',
+  endTag: '',
+  targetTag: '',
 };
 
 /**

@@ -5,6 +5,7 @@ import {
   DEFAULT_TEMPLATE_NAME,
   defaultTemplate,
   defaultRule,
+  defaultClewdTagTransferRule,
   defaultWorldbookGroup,
   WORLD_BOOK_GROUP_MODES,
   WORLD_BOOK_ANCHORS,
@@ -129,6 +130,10 @@ export function ensureTemplateDefaults(template) {
       }))
     : [];
 
+  template.clewd_tag_transfer_rules = Array.isArray(template.clewd_tag_transfer_rules)
+    ? template.clewd_tag_transfer_rules.map((rule, index) => sanitizeClewdTagTransferRule(rule, index))
+    : [];
+
   if (!template.stored_data || typeof template.stored_data !== 'object') {
     template.stored_data = {};
   }
@@ -142,6 +147,44 @@ export function ensureTemplateDefaults(template) {
 
   sanitizeWorldbookGroups(template);
   return template;
+}
+
+/**
+ * 构造默认的 clewd 标签搬运规则。
+ *
+ * @param {number} [index=0] 规则顺序
+ * @returns {object} 默认规则
+ */
+export function createDefaultClewdTagTransferRule(index = 0) {
+  return {
+    ...defaultClewdTagTransferRule,
+    label: `规则${index + 1}`,
+  };
+}
+
+/**
+ * 规范化单条 clewd 标签搬运规则。
+ *
+ * @param {any} rule 原始规则
+ * @param {number} [index=0] 规则顺序
+ * @returns {{ enabled: boolean, label: string, startTag: string, endTag: string, targetTag: string }}
+ */
+export function sanitizeClewdTagTransferRule(rule, index = 0) {
+  const base = createDefaultClewdTagTransferRule(index);
+  if (!rule || typeof rule !== 'object') {
+    return base;
+  }
+
+  const sanitized = { ...base, ...rule };
+  sanitized.enabled = normalizeBool(rule.enabled, true);
+  sanitized.label =
+    typeof rule.label === 'string' && rule.label.trim()
+      ? rule.label.trim()
+      : base.label;
+  sanitized.startTag = typeof rule.startTag === 'string' ? rule.startTag.trim() : '';
+  sanitized.endTag = typeof rule.endTag === 'string' ? rule.endTag.trim() : '';
+  sanitized.targetTag = typeof rule.targetTag === 'string' ? rule.targetTag.trim() : '';
+  return sanitized;
 }
 
 /**
